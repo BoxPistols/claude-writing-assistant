@@ -28,7 +28,9 @@ app.post('/api/analyze', async (req, res) => {
   } catch (err) {
     console.error('Proxy error:', err.message || err);
     const status = err.status || 500;
-    const message = typeof err.message === 'string' ? err.message : 'Internal server error';
+    const message = status >= 500
+      ? 'Internal server error'
+      : (typeof err.message === 'string' ? err.message : 'Internal server error');
     res.status(status).json({ error: message });
   }
 });

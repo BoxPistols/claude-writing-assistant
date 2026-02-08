@@ -1,7 +1,14 @@
 import { analyzeRequest, setCorsHeaders } from './_shared.js';
 
 const parseBody = (req) => {
-  if (!req.body) return {};
+  if (req.body == null) throw { status: 400, message: 'Missing JSON body' };
+  if (Buffer.isBuffer(req.body)) {
+    try {
+      return JSON.parse(req.body.toString('utf8'));
+    } catch {
+      throw { status: 400, message: 'Invalid JSON body' };
+    }
+  }
   if (typeof req.body === 'string') {
     try {
       return JSON.parse(req.body);
