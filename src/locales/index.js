@@ -1,6 +1,6 @@
 export const TRANSLATIONS = {
   'en-US': {
-    appTitle: 'Draftline',
+    appTitle: 'The Write',
     yourText: 'Your Text',
     sample: 'Sample',
     copy: 'Copy',
@@ -57,10 +57,10 @@ export const TRANSLATIONS = {
     sampleTexts: 'Sample Texts',
     loadSample: 'Load Sample',
     providerKeyMissing: 'API key not configured for this provider',
-    appTitleShort: 'Draftline',
+    appTitleShort: 'The Write',
   },
   'ja-JP': {
-    appTitle: 'Draftline',
+    appTitle: 'The Write',
     yourText: 'テキスト入力',
     sample: 'サンプル',
     copy: 'コピー',
@@ -117,7 +117,7 @@ export const TRANSLATIONS = {
     sampleTexts: 'サンプルテキスト',
     loadSample: 'サンプルを読み込む',
     providerKeyMissing: 'このプロバイダーのAPIキーが設定されていません',
-    appTitleShort: 'Draftline',
+    appTitleShort: 'The Write',
   },
 };
 
