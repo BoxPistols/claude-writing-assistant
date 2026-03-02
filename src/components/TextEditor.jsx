@@ -61,7 +61,7 @@ const saveEditorContent = (content) => {
   try { localStorage.setItem(CONTENT_STORAGE_KEY, JSON.stringify(content)); }
   catch (err) { console.warn('Failed to save editor content', err); }
 };
-const CATEGORIES = ['all', 'grammar', 'spelling', 'punctuation', 'style', 'clarity'];
+const CATEGORIES = ['all', 'grammar', 'spelling', 'punctuation', 'style', 'clarity', 'ai-writing'];
 
 const CAT_STYLES = {
   grammar: { color: 'var(--cat-grammar)', bg: 'var(--cat-grammar-bg)' },
@@ -69,16 +69,28 @@ const CAT_STYLES = {
   punctuation: { color: 'var(--cat-punctuation)', bg: 'var(--cat-punctuation-bg)' },
   style: { color: 'var(--cat-style)', bg: 'var(--cat-style-bg)' },
   clarity: { color: 'var(--cat-clarity)', bg: 'var(--cat-clarity-bg)' },
+  'ai-writing': { color: 'var(--cat-ai-writing)', bg: 'var(--cat-ai-writing-bg)' },
 };
 
 const analyzeViaProxy = async (model, text, clientKeys) => {
+  const langName = locale.startsWith('ja') ? 'Japanese' : 'English';
   const userPrompt = `You are a professional writing assistant. Analyze the following text and provide suggestions for improvement.
 
 For each suggestion, provide a JSON array where each item has:
-- "type": one of "grammar", "spelling", "punctuation", "style", "clarity"
+- "type": one of "grammar", "spelling", "punctuation", "style", "clarity", "ai-writing"
 - "original": the exact text that should be changed
 - "suggestion": the improved text
-- "explanation": brief explanation of the change (in ${locale.startsWith('ja') ? 'Japanese' : 'English'})
+- "explanation": brief explanation of the change (in ${langName})
+
+Use "ai-writing" type for patterns typical of AI-generated text, including:
+- Markup artifacts: leftover **bold** asterisks, em dashes (—) for rephrasing, "： " (colon + space), excessive （） parenthetical asides, ／ connecting parallel concepts
+- Monotonous rhythm: repeated sentence endings (です。です。です。), excessive conjunctions (さらに、また、したがって / furthermore, moreover, additionally), uniform emotional tone
+- Formulaic structure: long preambles before the point, announcing structure in body text ("以下の3つの観点から説明します" / "I will explain from 3 perspectives"), STEP/ステップ formatting
+- Hedging and false balance: excessive qualifiers ("一概には言えませんが" / "generally speaking"), forced both-sides framing ("メリットもあればデメリットもあります" / "there are both pros and cons")
+- Abstract buzzwords without substance: "最適化", "価値を最大化", "本質", "optimize", "maximize value" used without concrete backing
+- Cliché metaphors: overused images like 羅針盤/土台/エンジン/設計図 (compass/foundation/engine/blueprint)
+
+For ai-writing suggestions, rewrite to sound more natural and human.
 
 Respond ONLY with a valid JSON array. No other text.
 
