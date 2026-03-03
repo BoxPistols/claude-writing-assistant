@@ -107,7 +107,7 @@ ${text}`;
     }),
   });
 
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) { const e = new Error(`API error: ${res.status}`); e.status = res.status; throw e; }
   return res.json();
 };
 
@@ -184,7 +184,7 @@ ${text}`;
     }),
   });
 
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) { const e = new Error(`API error: ${res.status}`); e.status = res.status; throw e; }
   return res.json();
 };
 
@@ -515,7 +515,7 @@ export default function TextEditor() {
             else alert(t('failedToParse'));
           } catch (e) { console.error('[parse]', e, content); alert(t('failedToParse')); }
         })
-        .catch((e) => { console.error('[analyze]', e); alert(t('failedToAnalyze')); })
+        .catch((e) => { console.error('[analyze]', e); alert(e.status === 401 ? t('failedUnauthorized') : t('failedToAnalyze')); })
         .finally(() => setIsAnalyzing(false)),
 
       rewriteViaProxy(selectedModel, text, clientKeys)
@@ -524,7 +524,7 @@ export default function TextEditor() {
           if (rewritten) setRewriteResult({ original: text, rewritten });
           else alert(t('failedToRewrite'));
         })
-        .catch((e) => { console.error('[rewrite]', e); alert(t('failedToRewrite')); })
+        .catch((e) => { console.error('[rewrite]', e); alert(e.status === 401 ? t('failedUnauthorized') : t('failedToRewrite')); })
         .finally(() => setIsRewriting(false)),
     ]);
   };
@@ -1062,7 +1062,7 @@ export default function TextEditor() {
                     <input
                       type={keyVisibility[key] ? 'text' : 'password'}
                       value={clientKeys[key] || ''}
-                      onChange={(e) => setClientKeys((prev) => ({ ...prev, [key]: e.target.value || undefined }))}
+                      onChange={(e) => setClientKeys((prev) => ({ ...prev, [key]: e.target.value.trim() || undefined }))}
                       placeholder={provider.envKey}
                       style={{
                         width: '100%', padding: '8px 36px 8px 12px', fontSize: 13,
