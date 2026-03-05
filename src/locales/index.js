@@ -87,6 +87,14 @@ export const TRANSLATIONS = {
     elapsed: 'elapsed',
     rateLimitReached: 'Daily limit reached (50/day). Resets at {time}.',
     remaining: 'remaining',
+    instructionTemplates: [
+      { label: 'Casual', text: 'Use a casual, conversational tone. Keep it friendly and approachable.' },
+      { label: 'Formal', text: 'Use formal, professional language. Maintain a polished and authoritative tone.' },
+      { label: 'Chat', text: 'Write as if chatting with a friend. Use short sentences and natural expressions.' },
+      { label: 'Team', text: 'Write for internal team communication. Be clear, concise, and action-oriented.' },
+      { label: 'Email', text: 'Optimize for email reply. Be polite, concise, and include clear next steps.' },
+      { label: 'SNS', text: 'Optimize for social media. Be engaging, concise, and use a natural voice.' },
+    ],
   },
   'ja-JP': {
     appTitle: 'The Write',
@@ -176,6 +184,14 @@ export const TRANSLATIONS = {
     elapsed: '経過',
     rateLimitReached: '本日の利用上限に達しました（50回/日）。{time} にリセットされます。',
     remaining: '残り',
+    instructionTemplates: [
+      { label: 'カジュアル', text: 'カジュアルで親しみやすいトーンにしてください。堅苦しくない自然な表現を使ってください。' },
+      { label: 'フォーマル', text: 'フォーマルで丁寧な文体にしてください。ビジネス文書にふさわしい格調のある表現を使ってください。' },
+      { label: 'チャット', text: '友人とチャットするような口調にしてください。短文で、テンポよく書いてください。' },
+      { label: 'メンバー向け', text: 'チーム内の共有用に最適化してください。結論ファーストで、具体的なアクションが明確に伝わるようにしてください。' },
+      { label: 'メール返信', text: 'メール返信に適した文体にしてください。簡潔・丁寧で、次のアクションを明確にしてください。' },
+      { label: 'SNS', text: 'SNS投稿に最適化してください。簡潔で読みやすく、自然な語り口にしてください。' },
+    ],
   },
 };
 

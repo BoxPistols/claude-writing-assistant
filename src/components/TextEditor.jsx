@@ -1149,6 +1149,21 @@ export default function TextEditor() {
             <label style={{ display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
               {t('customInstruction')}
             </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+              {(t('instructionTemplates') || []).map((tmpl) => (
+                <button key={tmpl.label}
+                  onClick={() => setCustomInstruction(customInstruction === tmpl.text ? '' : tmpl.text)}
+                  style={{
+                    padding: '3px 10px', fontSize: 11, fontWeight: 500,
+                    border: '1px solid var(--border-primary)', borderRadius: 20,
+                    background: customInstruction === tmpl.text ? 'var(--accent)' : 'var(--bg-secondary)',
+                    color: customInstruction === tmpl.text ? '#fff' : 'var(--text-secondary)',
+                    cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                  }}>
+                  {tmpl.label}
+                </button>
+              ))}
+            </div>
             <textarea
               value={customInstruction}
               onChange={(e) => setCustomInstruction(e.target.value)}
