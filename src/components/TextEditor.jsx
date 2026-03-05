@@ -827,6 +827,9 @@ export default function TextEditor() {
               >
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: isAutoMode ? 'var(--accent)' : (isProviderAvailable(currentModel.provider) ? 'var(--accept)' : 'var(--cat-spelling)'), flexShrink: 0 }} />
                 <span style={{ fontWeight: 600 }}>{isAutoMode ? t('autoMode') : currentModel.name}</span>
+                {isAutoMode && <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 400 }}>
+                  {getModel(autoSelectModel(charCount, isProviderAvailable))?.name || ''}
+                </span>}
                 <ChevronDown style={{ width: 12, height: 12, opacity: 0.4 }} />
               </button>
             }
