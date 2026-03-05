@@ -41,7 +41,7 @@ async function callOpenAI(model, messages, apiKey, maxTokens) {
     },
     body: JSON.stringify({
       model,
-      max_completion_tokens: maxTokens || 4000,
+      max_completion_tokens: maxTokens || 16000,
       messages,
     }),
   });
@@ -75,7 +75,7 @@ async function callAnthropic(model, messages, apiKey, maxTokens) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: maxTokens || 4000,
+      max_tokens: maxTokens || 16000,
       messages,
     }),
   });
@@ -107,7 +107,7 @@ async function callGemini(model, messages, apiKey, maxTokens) {
       },
       body: JSON.stringify({
         contents,
-        generationConfig: { maxOutputTokens: maxTokens || 4000 },
+        generationConfig: { maxOutputTokens: maxTokens || 16000 },
       }),
     }
   );

@@ -11,6 +11,7 @@ import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, PROVIDERS, getModel, autoSelectMode
 import { SAMPLES } from '../config/samples';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEvent, matchShortcut, DEFAULT_SHORTCUTS } from '../utils/platform';
+import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT } from '../utils/rateLimit';
 
 const JP_SANS_FALLBACK = "'Noto Sans JP', 'BIZ UDPGothic', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Segoe UI', -apple-system, sans-serif";
 const JP_SERIF_FALLBACK = "'Noto Serif JP', 'BIZ UDPMincho', 'Hiragino Mincho ProN', 'Yu Mincho', 'MS PMincho', serif";
@@ -106,7 +107,7 @@ ${text}`;
       model,
       messages: [{ role: 'user', content: userPrompt }],
       clientKeys,
-      maxTokens: 4000,
+      maxTokens: 16000,
     }),
   });
 
@@ -189,7 +190,7 @@ ${text}`;
       model,
       messages: [{ role: 'user', content: prompt }],
       clientKeys,
-      maxTokens: 3000,
+      maxTokens: 16000,
     }),
   });
 
@@ -379,6 +380,7 @@ export default function TextEditor() {
   const [recordingAction, setRecordingAction] = useState(null); // ショートカット記録中のアクション名
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [estimatedSecs, setEstimatedSecs] = useState(0);
+  const [remaining, setRemaining] = useState(getRemaining);
   const elapsedRef = useRef(null); // setInterval ID
   const editorRef = useRef(null);
   const savedSelectionRef = useRef(null);
@@ -411,7 +413,11 @@ export default function TextEditor() {
     }
   };
 
-  useEffect(() => { refreshProviders(); }, [refreshProviders]);
+  useEffect(() => {
+    refreshProviders();
+    // 初回読み込み時に各プロバイダーの接続テストを自動実行
+    for (const key of Object.keys(PROVIDERS)) handleTestConnection(key);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const isOpen = !!rewriteResult;
@@ -513,9 +519,14 @@ export default function TextEditor() {
     }
   };
 
-  // Check if provider is available (server env OR client key)
+  // Check if provider is available (server env OR client key, AND not failed test)
   const isProviderAvailable = (provider) => {
-    return !!availableProviders[provider] || !!clientKeys[provider];
+    const hasKey = !!availableProviders[provider] || !!clientKeys[provider];
+    if (!hasKey) return false;
+    // 接続テスト実施済みで失敗した場合は無効
+    const test = testResults[provider];
+    if (test && !test.loading && !test.ok) return false;
+    return true;
   };
 
   // Auto Modeならテキスト長に応じてモデルを決定、そうでなければ選択中のモデルを返す
@@ -538,9 +549,20 @@ export default function TextEditor() {
     if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
   }, []);
 
+  const checkRateLimit = useCallback(() => {
+    if (!canUse()) {
+      const resetTime = getResetTime();
+      const timeStr = resetTime ? new Date(resetTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      alert(t('rateLimitReached').replace('{time}', timeStr));
+      return false;
+    }
+    return true;
+  }, []);
+
   const handleAnalyze = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
     if (!text) { alert(t('pleaseEnterText')); return; }
+    if (!checkRateLimit()) return;
 
     const modelId = resolveModel(text.length);
     setIsAnalyzing(true);
@@ -550,6 +572,7 @@ export default function TextEditor() {
 
     try {
       const data = await analyzeViaProxy(modelId, text, clientKeys, customInstruction);
+      recordUsage(); setRemaining(getRemaining());
       if (data.usage) setLastUsage({ ...data.usage, model: modelId });
       const content = data.content?.[0]?.text || '';
       try {
@@ -571,11 +594,12 @@ export default function TextEditor() {
       alert(t('failedToAnalyze'));
     }
     finally { setIsAnalyzing(false); stopProgress(); }
-  }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress]);
+  }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress, checkRateLimit]);
 
   const handleRewrite = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
     if (!text) { alert(t('pleaseEnterText')); return; }
+    if (!checkRateLimit()) return;
 
     const modelId = resolveModel(text.length);
     setIsRewriting(true);
@@ -583,6 +607,7 @@ export default function TextEditor() {
     startProgress(modelId, text.length);
     try {
       const data = await rewriteViaProxy(modelId, text, clientKeys);
+      recordUsage(); setRemaining(getRemaining());
       const rewritten = data.content?.[0]?.text?.trim() || '';
       if (rewritten) setRewriteResult({ original: text, rewritten });
       else alert(t('failedToRewrite'));
@@ -590,11 +615,18 @@ export default function TextEditor() {
       console.error('Rewrite error:', e);
       alert(t('failedToRewrite'));
     } finally { setIsRewriting(false); stopProgress(); }
-  }, [resolveModel, clientKeys, startProgress, stopProgress]);
+  }, [resolveModel, clientKeys, startProgress, stopProgress, checkRateLimit]);
 
   const handleRunAll = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
     if (!text) { alert(t('pleaseEnterText')); return; }
+    // RunAllは2回分消費するので事前チェック
+    if (getRemaining() < 2) {
+      const resetTime = getResetTime();
+      const timeStr = resetTime ? new Date(resetTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      alert(t('rateLimitReached').replace('{time}', timeStr));
+      return;
+    }
 
     const modelId = resolveModel(text.length);
     setIsAnalyzing(true);
@@ -608,6 +640,7 @@ export default function TextEditor() {
     await Promise.allSettled([
       analyzeViaProxy(modelId, text, clientKeys, customInstruction)
         .then((data) => {
+          recordUsage();
           if (data.usage) setLastUsage({ ...data.usage, model: modelId });
           const content = data.content?.[0]?.text || '';
           try {
@@ -624,6 +657,7 @@ export default function TextEditor() {
 
       rewriteViaProxy(modelId, text, clientKeys)
         .then((data) => {
+          recordUsage();
           const rewritten = data.content?.[0]?.text?.trim() || '';
           if (rewritten) pendingRewrite = { original: text, rewritten };
           else alert(t('failedToRewrite'));
@@ -632,6 +666,7 @@ export default function TextEditor() {
         .finally(() => setIsRewriting(false)),
     ]);
 
+    setRemaining(getRemaining());
     stopProgress();
     if (pendingRewrite) setRewriteResult(pendingRewrite);
   }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress]);
@@ -1194,6 +1229,10 @@ export default function TextEditor() {
                   : (<><Wand2 style={{ width: 14, height: 14 }} />{t('rewriteAI')}
                       <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.rewrite.parts)}</span></>)}
               </button>
+            </div>
+            {/* 残り利用回数 */}
+            <div style={{ textAlign: 'right', fontSize: 11, color: remaining <= 5 ? 'var(--cat-grammar)' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+              {t('remaining')}: {remaining}/{RATE_LIMIT}
             </div>
           </div>
         </div>

@@ -47,7 +47,7 @@ export function autoSelectModel(charCount, isAvailable) {
 
 // .envで VITE_DEFAULT_MODEL を指定可能（例: VITE_DEFAULT_MODEL=gpt-4.1-nano）
 const envDefault = typeof import.meta !== 'undefined' && import.meta.env?.VITE_DEFAULT_MODEL;
-export const DEFAULT_MODEL_ID = (envDefault && AVAILABLE_MODELS.some((m) => m.id === envDefault)) ? envDefault : 'gpt-4.1-nano';
+export const DEFAULT_MODEL_ID = (envDefault && AVAILABLE_MODELS.some((m) => m.id === envDefault)) ? envDefault : 'gemini-2.5-flash-lite';
 
 export const getModel = (id) => AVAILABLE_MODELS.find((m) => m.id === id);
 export const getProvider = (id) => getModel(id)?.provider;

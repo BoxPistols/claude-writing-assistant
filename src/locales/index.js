@@ -85,6 +85,8 @@ export const TRANSLATIONS = {
     autoMode: 'Auto',
     autoModeDesc: 'Auto-select model by text length',
     elapsed: 'elapsed',
+    rateLimitReached: 'Daily limit reached (50/day). Resets at {time}.',
+    remaining: 'remaining',
   },
   'ja-JP': {
     appTitle: 'The Write',
@@ -172,6 +174,8 @@ export const TRANSLATIONS = {
     autoMode: '自動',
     autoModeDesc: '文字数に応じてモデルを自動選択',
     elapsed: '経過',
+    rateLimitReached: '本日の利用上限に達しました（50回/日）。{time} にリセットされます。',
+    remaining: '残り',
   },
 };
 

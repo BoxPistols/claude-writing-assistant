@@ -10,6 +10,23 @@ const app = express();
 const PORT = process.env.PORT || 3456;
 
 app.use(cors());
+
+// 簡易Basic認証（BASIC_AUTH_PASSWORD が設定されている場合のみ有効）
+if (process.env.BASIC_AUTH_PASSWORD) {
+  app.use((req, res, next) => {
+    const auth = req.headers.authorization;
+    if (auth) {
+      const [scheme, encoded] = auth.split(' ');
+      if (scheme === 'Basic' && encoded) {
+        const [, pwd] = Buffer.from(encoded, 'base64').toString().split(':');
+        if (pwd === process.env.BASIC_AUTH_PASSWORD) return next();
+      }
+    }
+    res.setHeader('WWW-Authenticate', 'Basic realm="The Write"');
+    res.status(401).send('Authentication required');
+  });
+}
+
 app.use(express.json({ limit: '10mb' }));
 
 // Serve static files in production
