@@ -187,6 +187,9 @@ export async function analyzeRequest({ model, messages, clientKeys, maxTokens } 
   }
 
   const apiKey = resolveKey(provider, clientKeys);
+  if (!apiKey) {
+    throw { status: 401, message: `API key not configured for provider: ${provider}` };
+  }
 
   switch (provider) {
     case 'openai':
