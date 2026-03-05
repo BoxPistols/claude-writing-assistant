@@ -30,7 +30,7 @@ export function resolveKey(provider, clientKeys) {
   return clientKeys?.[provider] || process.env[ENV_KEYS[provider]] || null;
 }
 
-async function callOpenAI(model, messages, apiKey, maxTokens = 1500) {
+async function callOpenAI(model, messages, apiKey, maxTokens) {
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
 
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -41,7 +41,7 @@ async function callOpenAI(model, messages, apiKey, maxTokens = 1500) {
     },
     body: JSON.stringify({
       model,
-      max_completion_tokens: maxTokens,
+      max_completion_tokens: maxTokens || 16000,
       messages,
     }),
   });
@@ -63,7 +63,7 @@ async function callOpenAI(model, messages, apiKey, maxTokens = 1500) {
   };
 }
 
-async function callAnthropic(model, messages, apiKey, maxTokens = 1500) {
+async function callAnthropic(model, messages, apiKey, maxTokens) {
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -75,7 +75,7 @@ async function callAnthropic(model, messages, apiKey, maxTokens = 1500) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: maxTokens,
+      max_tokens: maxTokens || 16000,
       messages,
     }),
   });
@@ -89,7 +89,7 @@ async function callAnthropic(model, messages, apiKey, maxTokens = 1500) {
   return response.json();
 }
 
-async function callGemini(model, messages, apiKey, maxTokens = 1500) {
+async function callGemini(model, messages, apiKey, maxTokens) {
   if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
 
   const contents = messages.map((m) => ({
@@ -107,7 +107,7 @@ async function callGemini(model, messages, apiKey, maxTokens = 1500) {
       },
       body: JSON.stringify({
         contents,
-        generationConfig: { maxOutputTokens: maxTokens },
+        generationConfig: { maxOutputTokens: maxTokens || 16000 },
       }),
     }
   );
@@ -131,6 +131,55 @@ async function callGemini(model, messages, apiKey, maxTokens = 1500) {
   };
 }
 
+export async function testConnection(provider, apiKey) {
+  if (!apiKey) throw { status: 400, message: 'API key not provided' };
+
+  switch (provider) {
+    case 'openai': {
+      const res = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw { status: res.status, message: `OpenAI: ${err}` };
+      }
+      return true;
+    }
+    case 'anthropic': {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1,
+          messages: [{ role: 'user', content: 'hi' }],
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        throw { status: res.status, message: `Anthropic: ${err}` };
+      }
+      return true;
+    }
+    case 'gemini': {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`
+      );
+      if (!res.ok) {
+        const err = await res.text();
+        throw { status: res.status, message: `Gemini: ${err}` };
+      }
+      return true;
+    }
+    default:
+      throw { status: 400, message: `Unknown provider: ${provider}` };
+  }
+}
+
 export async function analyzeRequest({ model, messages, clientKeys, maxTokens } = {}) {
   const provider = getProvider(model);
   if (!provider) {
@@ -138,6 +187,9 @@ export async function analyzeRequest({ model, messages, clientKeys, maxTokens } 
   }
 
   const apiKey = resolveKey(provider, clientKeys);
+  if (!apiKey) {
+    throw { status: 401, message: `API key not configured for provider: ${provider}` };
+  }
 
   switch (provider) {
     case 'openai':
