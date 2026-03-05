@@ -82,6 +82,9 @@ export const TRANSLATIONS = {
     shortcutRedo: 'Redo',
     shortcutRecording: 'Press keys...',
     shortcutReset: 'Reset to Default',
+    autoMode: 'Auto',
+    autoModeDesc: 'Auto-select model by text length',
+    elapsed: 'elapsed',
   },
   'ja-JP': {
     appTitle: 'The Write',
@@ -166,6 +169,9 @@ export const TRANSLATIONS = {
     shortcutRedo: 'やり直し',
     shortcutRecording: 'キーを押してください...',
     shortcutReset: 'デフォルトに戻す',
+    autoMode: '自動',
+    autoModeDesc: '文字数に応じてモデルを自動選択',
+    elapsed: '経過',
   },
 };
 

@@ -7,7 +7,7 @@ import {
   Undo2, Redo2,
 } from 'lucide-react';
 import { t, locale } from '../locales';
-import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, PROVIDERS, getModel } from '../config/models';
+import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, PROVIDERS, getModel, autoSelectModel } from '../config/models';
 import { SAMPLES } from '../config/samples';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEvent, matchShortcut, DEFAULT_SHORTCUTS } from '../utils/platform';
@@ -132,11 +132,13 @@ const rewriteViaProxy = async (model, text, clientKeys) => {
 - —（em dash）を言い換えに使わない
 
 【厳守ルール：文体・内容】
+- 語尾は「〜です」「〜ます」「〜と思います」「〜だと考えられます」「〜ではないでしょうか」など丁寧体（です・ます調）を基本とする
+- 「〜だ。」「〜なのだ。」「〜である。」などの常体（だ・である調）は使わない
+- 同じ語尾の3連続以上を避け、「〜です」「〜でしょう」「〜かもしれません」「〜と言えます」などを混ぜてリズムをつける
 - 「以下では〜を説明します」「結論から言うと」などの前置き宣言を入れない
 - 「一概には言えませんが」「場合によります」「一般的に」などの逃げ文句を削る
 - 「最適化」「本質」「価値を最大化」「エコシステム」などの抽象語を、何がどうなるかが伝わる具体的な表現に置き換える
 - 「さらに」「また」「したがって」「そのため」「結果として」などの接続詞を削るか最小限にする
-- 同じ語尾（〜です。〜です。〜です。）の連続を避ける
 - 短い文と長い文を混ぜ、文のリズムにメリハリをつける
 - 「参考になれば幸いです」「ぜひ活用してみてください」などの締めの定型句を入れない
 - STEP/ステップによる構造宣言を避ける
@@ -375,6 +377,9 @@ export default function TextEditor() {
   const [lastUsage, setLastUsage] = useState(null);
   const [shortcuts, setShortcuts] = useState(loadShortcuts);
   const [recordingAction, setRecordingAction] = useState(null); // ショートカット記録中のアクション名
+  const [elapsedSecs, setElapsedSecs] = useState(0);
+  const [estimatedSecs, setEstimatedSecs] = useState(0);
+  const elapsedRef = useRef(null); // setInterval ID
   const editorRef = useRef(null);
   const savedSelectionRef = useRef(null);
   const isComposingRef = useRef(false); // IME変換中フラグ
@@ -513,20 +518,41 @@ export default function TextEditor() {
     return !!availableProviders[provider] || !!clientKeys[provider];
   };
 
+  // Auto Modeならテキスト長に応じてモデルを決定、そうでなければ選択中のモデルを返す
+  const resolveModel = useCallback((textLength) => {
+    if (selectedModel === 'auto') return autoSelectModel(textLength, isProviderAvailable);
+    return selectedModel;
+  }, [selectedModel, availableProviders, clientKeys]);
+
+  // プログレスタイマー開始
+  const startProgress = useCallback((modelId, textLength) => {
+    const model = getModel(modelId);
+    const est = Math.max(3, Math.round((model?.secsPerKChar || 5) * (textLength / 1000)));
+    setEstimatedSecs(est);
+    setElapsedSecs(0);
+    if (elapsedRef.current) clearInterval(elapsedRef.current);
+    elapsedRef.current = setInterval(() => setElapsedSecs((s) => s + 1), 1000);
+  }, []);
+
+  const stopProgress = useCallback(() => {
+    if (elapsedRef.current) { clearInterval(elapsedRef.current); elapsedRef.current = null; }
+  }, []);
+
   const handleAnalyze = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
     if (!text) { alert(t('pleaseEnterText')); return; }
 
+    const modelId = resolveModel(text.length);
     setIsAnalyzing(true);
     setSuggestions([]);
     setLastUsage(null);
+    startProgress(modelId, text.length);
 
     try {
-      const data = await analyzeViaProxy(selectedModel, text, clientKeys, customInstruction);
-      if (data.usage) setLastUsage({ ...data.usage, model: selectedModel });
+      const data = await analyzeViaProxy(modelId, text, clientKeys, customInstruction);
+      if (data.usage) setLastUsage({ ...data.usage, model: modelId });
       const content = data.content?.[0]?.text || '';
       try {
-        // マークダウンコードブロックを除去してからJSONを抽出
         const cleaned = content.replace(/```(?:json)?\s*/g, '').replace(/```/g, '');
         const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
@@ -544,43 +570,45 @@ export default function TextEditor() {
       console.error('Analyze error:', e);
       alert(t('failedToAnalyze'));
     }
-    finally { setIsAnalyzing(false); }
-  }, [selectedModel, clientKeys, customInstruction]);
+    finally { setIsAnalyzing(false); stopProgress(); }
+  }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress]);
 
   const handleRewrite = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
     if (!text) { alert(t('pleaseEnterText')); return; }
 
+    const modelId = resolveModel(text.length);
     setIsRewriting(true);
-    setSuggestions([]); // リライトでテキストが変わるため既存の提案をクリア
+    setSuggestions([]);
+    startProgress(modelId, text.length);
     try {
-      const data = await rewriteViaProxy(selectedModel, text, clientKeys);
+      const data = await rewriteViaProxy(modelId, text, clientKeys);
       const rewritten = data.content?.[0]?.text?.trim() || '';
       if (rewritten) setRewriteResult({ original: text, rewritten });
       else alert(t('failedToRewrite'));
     } catch (e) {
       console.error('Rewrite error:', e);
       alert(t('failedToRewrite'));
-    } finally { setIsRewriting(false); }
-  }, [selectedModel, clientKeys]);
+    } finally { setIsRewriting(false); stopProgress(); }
+  }, [resolveModel, clientKeys, startProgress, stopProgress]);
 
   const handleRunAll = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
     if (!text) { alert(t('pleaseEnterText')); return; }
 
+    const modelId = resolveModel(text.length);
     setIsAnalyzing(true);
     setIsRewriting(true);
     setSuggestions([]);
     setLastUsage(null);
+    startProgress(modelId, text.length);
 
-    // 分析とリライトを並行実行（速度重視）
-    // リライト結果はstateに保持するだけで、ダイアログはまだ出さない
     let pendingRewrite = null;
 
     await Promise.allSettled([
-      analyzeViaProxy(selectedModel, text, clientKeys, customInstruction)
+      analyzeViaProxy(modelId, text, clientKeys, customInstruction)
         .then((data) => {
-          if (data.usage) setLastUsage({ ...data.usage, model: selectedModel });
+          if (data.usage) setLastUsage({ ...data.usage, model: modelId });
           const content = data.content?.[0]?.text || '';
           try {
             const cleaned = content.replace(/```(?:json)?\s*/g, '').replace(/```/g, '');
@@ -594,7 +622,7 @@ export default function TextEditor() {
         .catch((e) => { console.error('[analyze]', e); })
         .finally(() => setIsAnalyzing(false)),
 
-      rewriteViaProxy(selectedModel, text, clientKeys)
+      rewriteViaProxy(modelId, text, clientKeys)
         .then((data) => {
           const rewritten = data.content?.[0]?.text?.trim() || '';
           if (rewritten) pendingRewrite = { original: text, rewritten };
@@ -604,10 +632,9 @@ export default function TextEditor() {
         .finally(() => setIsRewriting(false)),
     ]);
 
-    // 両方完了後にリライト結果ダイアログを表示
-    // 先に提案を確認 → その後リライト結果を確認、という順序になる
+    stopProgress();
     if (pendingRewrite) setRewriteResult(pendingRewrite);
-  }, [selectedModel, clientKeys, customInstruction]);
+  }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress]);
 
   const applyRewrite = useCallback(() => {
     if (rewriteResult && editorRef.current) {
@@ -657,7 +684,8 @@ export default function TextEditor() {
     }
   };
 
-  const currentModel = getModel(selectedModel) || AVAILABLE_MODELS[0];
+  const isAutoMode = selectedModel === 'auto';
+  const currentModel = isAutoMode ? null : (getModel(selectedModel) || AVAILABLE_MODELS[0]);
   const groupedModels = Object.keys(PROVIDERS).map((pKey) => ({
     provider: pKey,
     label: PROVIDERS[pKey].name,
@@ -797,13 +825,34 @@ export default function TextEditor() {
                 onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--border-accent)')}
                 onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--border-subtle)')}
               >
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: isProviderAvailable(currentModel.provider) ? 'var(--accept)' : 'var(--cat-spelling)', flexShrink: 0 }} />
-                <span style={{ fontWeight: 600 }}>{currentModel.name}</span>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: isAutoMode ? 'var(--accent)' : (isProviderAvailable(currentModel.provider) ? 'var(--accept)' : 'var(--cat-spelling)'), flexShrink: 0 }} />
+                <span style={{ fontWeight: 600 }}>{isAutoMode ? t('autoMode') : currentModel.name}</span>
                 <ChevronDown style={{ width: 12, height: 12, opacity: 0.4 }} />
               </button>
             }
           >
             <div style={{ width: 360, maxHeight: 420, overflow: 'auto', padding: '6px 0' }}>
+              {/* Auto Mode */}
+              <button
+                onClick={() => { setSelectedModel('auto'); closeDropdown(); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                  padding: '10px 14px', fontSize: 13, fontWeight: isAutoMode ? 600 : 400,
+                  background: isAutoMode ? 'var(--accent-soft)' : 'transparent',
+                  border: 'none', borderLeft: isAutoMode ? '3px solid var(--accent)' : '3px solid transparent',
+                  color: isAutoMode ? 'var(--accent)' : 'var(--text-primary)',
+                  cursor: 'pointer', textAlign: 'left', transition: 'all 0.12s',
+                }}
+                onMouseEnter={(e) => { if (!isAutoMode) e.currentTarget.style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={(e) => { if (!isAutoMode) e.currentTarget.style.background = 'transparent'; }}
+              >
+                <Sparkles style={{ width: 14, height: 14, color: 'var(--accent)' }} />
+                <div>
+                  <div>{t('autoMode')}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>{t('autoModeDesc')}</div>
+                </div>
+              </button>
+              <div style={{ borderBottom: '1px solid var(--border-subtle)', margin: '4px 0' }} />
               {groupedModels.map((group) => (
                 <div key={group.provider} style={{ marginBottom: 4 }}>
                   {/* Provider header */}
@@ -1094,10 +1143,24 @@ export default function TextEditor() {
               onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}>
               {(isAnalyzing || isRewriting)
                 ? (<><Loader2 style={{ width: 16, height: 16 }} className="animate-spin-slow" />
-                    {isAnalyzing && isRewriting ? `${t('analyzing')} & ${t('rewriting')}` : isAnalyzing ? t('analyzing') : t('rewriting')}</>)
+                    {isAnalyzing && isRewriting ? `${t('analyzing')} & ${t('rewriting')}` : isAnalyzing ? t('analyzing') : t('rewriting')}
+                    <span style={{ fontSize: 11, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>
+                      {Math.floor(elapsedSecs / 60)}:{String(elapsedSecs % 60).padStart(2, '0')}
+                    </span></>)
                 : (<><Sparkles style={{ width: 15, height: 15 }} /><Wand2 style={{ width: 15, height: 15 }} />{t('runAll')}
                     <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 4 }}>{formatShortcut(shortcuts.runAll.parts)}</span></>)}
             </button>
+            {/* プログレスバー */}
+            {(isAnalyzing || isRewriting) && estimatedSecs > 0 && (
+              <div style={{ height: 3, borderRadius: 2, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 2,
+                  background: 'var(--accent)',
+                  width: `${Math.min(95, (elapsedSecs / estimatedSecs) * 100)}%`,
+                  transition: 'width 1s linear',
+                }} />
+              </div>
+            )}
             {/* 分析のみ / AI文体修正のみ */}
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={handleAnalyze} disabled={isAnalyzing}
@@ -1109,7 +1172,8 @@ export default function TextEditor() {
                 onMouseEnter={(e) => { if (!isAnalyzing) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-soft)'; } }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
                 {isAnalyzing
-                  ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('analyzing')}</>)
+                  ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('analyzing')}
+                      <span style={{ fontSize: 10, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{elapsedSecs}s</span></>)
                   : (<><Sparkles style={{ width: 14, height: 14 }} />{t('analyzeText')}
                       <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.analyze.parts)}</span></>)}
               </button>
@@ -1122,7 +1186,8 @@ export default function TextEditor() {
                 onMouseEnter={(e) => { if (!isRewriting) { e.currentTarget.style.borderColor = 'var(--cat-ai-writing)'; e.currentTarget.style.background = 'var(--cat-ai-writing-bg)'; } }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
                 {isRewriting
-                  ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('rewriting')}</>)
+                  ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('rewriting')}
+                      <span style={{ fontSize: 10, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{elapsedSecs}s</span></>)
                   : (<><Wand2 style={{ width: 14, height: 14 }} />{t('rewriteAI')}
                       <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.rewrite.parts)}</span></>)}
               </button>
