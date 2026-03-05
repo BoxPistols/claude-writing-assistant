@@ -8,11 +8,9 @@ export const PROVIDERS = {
 
 // secsPerKChar: 1000文字あたりの推定処理秒数（プログレス表示用）
 export const AVAILABLE_MODELS = [
-  // OpenAI — nano/mini を優先
-  { id: 'gpt-5-nano', provider: 'openai', name: 'GPT-5 Nano', description: '最速・最安', inputPrice: 0.05, outputPrice: 0.40, speed: 5, quality: 3, secsPerKChar: 8 },
-  { id: 'gpt-5-mini', provider: 'openai', name: 'GPT-5 Mini', description: 'バランス型', inputPrice: 0.25, outputPrice: 2.00, speed: 4, quality: 4, secsPerKChar: 12 },
-  { id: 'gpt-4.1-nano', provider: 'openai', name: 'GPT-4.1 Nano', description: '旧世代・最安', inputPrice: 0.10, outputPrice: 0.40, speed: 5, quality: 2, secsPerKChar: 3 },
-  { id: 'gpt-4.1-mini', provider: 'openai', name: 'GPT-4.1 Mini', description: '旧世代・バランス', inputPrice: 0.40, outputPrice: 1.60, speed: 4, quality: 3, secsPerKChar: 5 },
+  // OpenAI
+  { id: 'gpt-4.1-nano', provider: 'openai', name: 'GPT-4.1 Nano', description: '最速・最安', inputPrice: 0.10, outputPrice: 0.40, speed: 5, quality: 2, secsPerKChar: 3 },
+  { id: 'gpt-4.1-mini', provider: 'openai', name: 'GPT-4.1 Mini', description: 'バランス型', inputPrice: 0.40, outputPrice: 1.60, speed: 4, quality: 3, secsPerKChar: 5 },
 
   // Anthropic
   { id: 'claude-haiku-4-5-20251001', provider: 'anthropic', name: 'Claude 4.5 Haiku', description: '最速・最安', inputPrice: 0.80, outputPrice: 4.00, speed: 5, quality: 3, secsPerKChar: 4 },

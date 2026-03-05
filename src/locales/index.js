@@ -85,7 +85,7 @@ export const TRANSLATIONS = {
     autoMode: 'Auto',
     autoModeDesc: 'Auto-select model by text length',
     elapsed: 'elapsed',
-    rateLimitReached: 'Daily limit reached (50/day). Resets at {time}.',
+    rateLimitReached: 'Daily limit reached (100/day). Resets at {time}.',
     remaining: 'remaining',
     instructionTemplates: [
       { label: 'Casual', text: 'Use a casual, conversational tone. Keep it friendly and approachable.' },
@@ -182,7 +182,7 @@ export const TRANSLATIONS = {
     autoMode: '自動',
     autoModeDesc: '文字数に応じてモデルを自動選択',
     elapsed: '経過',
-    rateLimitReached: '本日の利用上限に達しました（50回/日）。{time} にリセットされます。',
+    rateLimitReached: '本日の利用上限に達しました（100回/日）。{time} にリセットされます。',
     remaining: '残り',
     instructionTemplates: [
       { label: 'カジュアル', text: 'カジュアルで親しみやすいトーンにしてください。堅苦しくない自然な表現を使ってください。' },

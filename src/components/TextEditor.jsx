@@ -11,7 +11,7 @@ import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, PROVIDERS, getModel, autoSelectMode
 import { SAMPLES } from '../config/samples';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEvent, matchShortcut, DEFAULT_SHORTCUTS } from '../utils/platform';
-import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT } from '../utils/rateLimit';
+import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT, hasUserKeys } from '../utils/rateLimit';
 
 const JP_SANS_FALLBACK = "'Noto Sans JP', 'BIZ UDPGothic', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Segoe UI', -apple-system, sans-serif";
 const JP_SERIF_FALLBACK = "'Noto Serif JP', 'BIZ UDPMincho', 'Hiragino Mincho ProN', 'Yu Mincho', 'MS PMincho', serif";
@@ -841,6 +841,12 @@ export default function TextEditor() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* 残り利用回数（デフォルトキー使用時のみ） */}
+          {!hasUserKeys() && (
+            <span style={{ fontSize: 11, color: remaining <= 10 ? 'var(--cat-grammar)' : 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>
+              {remaining}/{RATE_LIMIT}
+            </span>
+          )}
           {/* Model Selector */}
           <Dropdown
             open={openDropdown === 'model'}
@@ -1244,10 +1250,6 @@ export default function TextEditor() {
                   : (<><Wand2 style={{ width: 14, height: 14 }} />{t('rewriteAI')}
                       <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.rewrite.parts)}</span></>)}
               </button>
-            </div>
-            {/* 残り利用回数 */}
-            <div style={{ textAlign: 'right', fontSize: 11, color: remaining <= 5 ? 'var(--cat-grammar)' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
-              {t('remaining')}: {remaining}/{RATE_LIMIT}
             </div>
           </div>
         </div>
