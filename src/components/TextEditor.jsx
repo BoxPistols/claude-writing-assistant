@@ -376,6 +376,14 @@ export default function TextEditor() {
   const savedSelectionRef = useRef(null);
   const isComposingRef = useRef(false); // IME変換中フラグ
 
+  const refreshEditorContent = useCallback(() => {
+    if (!editorRef.current) return;
+    setCharCount((editorRef.current.innerText || '').trim().length);
+    saveEditorContent({ html: editorRef.current.innerHTML });
+  }, []);
+
+  const { snapshot, undo, redo, canUndo, canRedo } = useUndoRedo(editorRef, refreshEditorContent);
+
   const refreshProviders = useCallback(() => {
     fetch('/api/providers').then((r) => r.json()).then(setAvailableProviders).catch(() => {});
   }, []);
@@ -464,14 +472,6 @@ export default function TextEditor() {
       sel.addRange(savedSelectionRef.current);
     }
   }, []);
-
-  const refreshEditorContent = useCallback(() => {
-    if (!editorRef.current) return;
-    setCharCount((editorRef.current.innerText || '').trim().length);
-    saveEditorContent({ html: editorRef.current.innerHTML });
-  }, []);
-
-  const { snapshot, undo, redo, canUndo, canRedo } = useUndoRedo(editorRef, refreshEditorContent);
 
   const resetEditorContent = useCallback(() => {
     snapshot();
