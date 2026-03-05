@@ -36,11 +36,11 @@ const SHORTCUTS_STORAGE_KEY = 'wa-shortcuts';
 // parts: formatShortcut用の表示キー配列
 // match: KeyboardEvent判定用 { key, shift }
 export const DEFAULT_SHORTCUTS = {
-  runAll:     { parts: ['mod', 'enter'],     match: { key: 'Enter', shift: false } },
-  analyze:    { parts: ['mod', 'shift', 'e'], match: { key: 'e', shift: true } },
-  rewrite:    { parts: ['mod', 'shift', 'j'], match: { key: 'j', shift: true } },
-  undo:       { parts: ['mod', 'z'],          match: { key: 'z', shift: false } },
-  redo:       { parts: ['mod', 'shift', 'z'], match: { key: 'z', shift: true } },
+  runAll:     { parts: ['mod', 'enter'],     match: { key: 'Enter', shift: false, alt: false } },
+  analyze:    { parts: ['mod', 'shift', 'e'], match: { key: 'e', shift: true, alt: false } },
+  rewrite:    { parts: ['mod', 'shift', 'j'], match: { key: 'j', shift: true, alt: false } },
+  undo:       { parts: ['mod', 'z'],          match: { key: 'z', shift: false, alt: false } },
+  redo:       { parts: ['mod', 'shift', 'z'], match: { key: 'z', shift: true, alt: false } },
 };
 
 // localStorageから保存済みショートカットを読み込み
@@ -86,7 +86,7 @@ export function shortcutFromEvent(e) {
 
   return {
     parts,
-    match: { key: e.key.length === 1 ? e.key.toLowerCase() : e.key, shift: e.shiftKey },
+    match: { key: e.key.length === 1 ? e.key.toLowerCase() : e.key, shift: e.shiftKey, alt: e.altKey },
   };
 }
 
@@ -97,5 +97,5 @@ export function matchShortcut(e, shortcutDef) {
   if (!isModKey(e)) return false;
   const m = shortcutDef.match;
   const eventKey = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  return eventKey === m.key && e.shiftKey === m.shift;
+  return eventKey === m.key && e.shiftKey === m.shift && e.altKey === !!m.alt;
 }

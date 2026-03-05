@@ -740,6 +740,18 @@ export default function TextEditor() {
       if (e.key === 'Escape') { setRecordingAction(null); return; }
       const sc = shortcutFromEvent(e);
       if (!sc) return; // モディファイアキー単体は無視
+      // 重複チェック: 他のアクションに同じキーが割り当て済みか
+      const duplicate = Object.entries(shortcuts).find(
+        ([action, def]) => action !== recordingAction && def.match.key === sc.match.key && def.match.shift === sc.match.shift && !!def.match.alt === !!sc.match.alt
+      );
+      if (duplicate) {
+        const labels = { runAll: t('shortcutRunAll'), analyze: t('shortcutAnalyze'), rewrite: t('shortcutRewrite'), undo: t('shortcutUndo'), redo: t('shortcutRedo') };
+        const msg = locale.startsWith('ja')
+          ? `${formatShortcut(sc.parts)} は「${labels[duplicate[0]]}」に割り当て済みです`
+          : `${formatShortcut(sc.parts)} is already assigned to "${labels[duplicate[0]]}"`;
+        alert(msg);
+        return;
+      }
       const updated = { ...shortcuts, [recordingAction]: sc };
       setShortcuts(updated);
       saveShortcuts(updated);
