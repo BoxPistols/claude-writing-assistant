@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keymap Tester</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; padding: 24px; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  .meta { font-size: 13px; color: #8b949e; margin-bottom: 24px; }
+  .current { background: #161b22; border: 2px solid #30363d; border-radius: 12px; padding: 32px; text-align: center; margin-bottom: 24px; transition: border-color 0.15s; }
+  .current.active { border-color: #58a6ff; }
+  .current .keys { font-size: 36px; font-weight: 700; letter-spacing: 2px; min-height: 48px; font-family: ui-monospace, monospace; }
+  .current .raw { font-size: 13px; color: #8b949e; margin-top: 12px; font-family: ui-monospace, monospace; }
+  .modifiers { display: flex; gap: 12px; justify-content: center; margin-top: 16px; }
+  .mod-badge { padding: 6px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; background: #21262d; color: #484f58; border: 1px solid #30363d; transition: all 0.1s; }
+  .mod-badge.on { background: #1f6feb; color: #fff; border-color: #58a6ff; }
+  .log { max-height: 400px; overflow-y: auto; border-radius: 8px; border: 1px solid #30363d; }
+  .log table { width: 100%; border-collapse: collapse; font-size: 13px; font-family: ui-monospace, monospace; }
+  .log th { position: sticky; top: 0; background: #161b22; text-align: left; padding: 8px 12px; color: #8b949e; font-weight: 600; border-bottom: 1px solid #30363d; }
+  .log td { padding: 6px 12px; border-bottom: 1px solid #21262d; }
+  .log tr:hover td { background: #161b22; }
+  .log .conflict { color: #f85149; }
+  .log .safe { color: #3fb950; }
+  .shortcuts { margin-top: 24px; }
+  .shortcuts h2 { font-size: 15px; margin-bottom: 12px; color: #8b949e; }
+  .shortcut-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+  .sc-item { display: flex; justify-content: space-between; padding: 8px 12px; background: #161b22; border-radius: 6px; border: 1px solid #30363d; font-size: 13px; }
+  .sc-item .label { color: #8b949e; }
+  .sc-item .key { font-family: ui-monospace, monospace; font-weight: 600; }
+  .sc-item.matched { border-color: #3fb950; background: #0d1f0d; }
+  .clear-btn { margin-top: 16px; padding: 8px 16px; background: #21262d; border: 1px solid #30363d; color: #8b949e; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .clear-btn:hover { background: #30363d; color: #e6edf3; }
+</style>
+</head>
+<body>
+
+<h1>Keymap Tester</h1>
+<p class="meta" id="os-info"></p>
+
+<div class="current" id="current">
+  <div class="keys" id="display">Press any key...</div>
+  <div class="raw" id="raw"></div>
+  <div class="modifiers">
+    <span class="mod-badge" id="m-meta">Meta</span>
+    <span class="mod-badge" id="m-ctrl">Ctrl</span>
+    <span class="mod-badge" id="m-shift">Shift</span>
+    <span class="mod-badge" id="m-alt">Alt</span>
+  </div>
+</div>
+
+<div class="shortcuts">
+  <h2>The Write Shortcuts (hit to test)</h2>
+  <div class="shortcut-grid" id="sc-grid"></div>
+</div>
+
+<div class="log" style="margin-top: 24px;">
+  <table>
+    <thead><tr><th>#</th><th>Key Combo</th><th>e.key</th><th>e.code</th><th>Conflict?</th></tr></thead>
+    <tbody id="log-body"></tbody>
+  </table>
+</div>
+<button class="clear-btn" onclick="document.getElementById('log-body').innerHTML=''; count=0;">Clear Log</button>
+
+<script>
+const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
+const mod = isMac ? 'Cmd' : 'Ctrl';
+const modSymbol = isMac ? '\u2318' : 'Ctrl';
+const shiftSymbol = isMac ? '\u21e7' : 'Shift';
+
+document.getElementById('os-info').textContent =
+  `OS: ${navigator.platform} | UA: ${navigator.userAgent.slice(0, 80)}... | Mod key: ${mod}`;
+
+// The Write shortcuts
+const appShortcuts = [
+  { label: 'Analyze & Fix AI Writing', keys: [mod, 'Enter'], test: (e) => isModKey(e) && e.key === 'Enter' && !e.shiftKey },
+  { label: 'Analyze Only', keys: [mod, 'Shift', 'E'], test: (e) => isModKey(e) && e.shiftKey && e.key === 'e' },
+  { label: 'AI Writing Fix Only', keys: [mod, 'Shift', 'J'], test: (e) => isModKey(e) && e.shiftKey && e.key === 'j' },
+  { label: 'Undo', keys: [mod, 'Z'], test: (e) => isModKey(e) && !e.shiftKey && e.key === 'z' },
+  { label: 'Redo', keys: [mod, 'Shift', 'Z'], test: (e) => isModKey(e) && e.shiftKey && e.key === 'z' },
+];
+
+// Browser/OS known shortcuts for conflict detection
+const knownConflicts = {
+  'meta+a': 'Select All', 'ctrl+a': 'Select All',
+  'meta+c': 'Copy', 'ctrl+c': 'Copy',
+  'meta+v': 'Paste', 'ctrl+v': 'Paste',
+  'meta+x': 'Cut', 'ctrl+x': 'Cut',
+  'meta+z': 'Undo (native)', 'ctrl+z': 'Undo (native)',
+  'meta+shift+z': 'Redo (native)', 'ctrl+shift+z': 'Redo (native)', 'ctrl+y': 'Redo (native)',
+  'meta+t': 'New Tab', 'ctrl+t': 'New Tab',
+  'meta+w': 'Close Tab', 'ctrl+w': 'Close Tab',
+  'meta+shift+w': 'Close Window',
+  'meta+r': 'Reload', 'ctrl+r': 'Reload',
+  'meta+shift+r': 'Hard Reload', 'ctrl+shift+r': 'Hard Reload',
+  'meta+l': 'Address Bar', 'ctrl+l': 'Address Bar',
+  'meta+n': 'New Window', 'ctrl+n': 'New Window',
+  'meta+shift+n': 'Incognito', 'ctrl+shift+n': 'Incognito',
+  'meta+shift+a': 'Search Tabs (Chrome)', 'ctrl+shift+a': 'Search Tabs (Chrome)',
+  'meta+shift+i': 'DevTools', 'ctrl+shift+i': 'DevTools',
+  'meta+shift+j': 'DevTools Console (Chrome)', 'ctrl+shift+j': 'DevTools Console (Chrome)',
+  'meta+shift+c': 'Inspect Element', 'ctrl+shift+c': 'Inspect Element',
+  'meta+shift+e': 'Extensions (Edge)', 'ctrl+shift+e': 'Extensions (Edge)',
+  'meta+f': 'Find', 'ctrl+f': 'Find',
+  'meta+p': 'Print', 'ctrl+p': 'Print',
+  'meta+s': 'Save', 'ctrl+s': 'Save',
+  'meta+q': 'Quit App',
+  'meta+shift+t': 'Reopen Tab', 'ctrl+shift+t': 'Reopen Tab',
+};
+
+function isModKey(e) { return isMac ? e.metaKey : e.ctrlKey; }
+
+// Render shortcut grid
+const grid = document.getElementById('sc-grid');
+appShortcuts.forEach((sc, i) => {
+  const el = document.createElement('div');
+  el.className = 'sc-item';
+  el.id = `sc-${i}`;
+  el.innerHTML = `<span class="label">${sc.label}</span><span class="key">${sc.keys.join(' + ')}</span>`;
+  grid.appendChild(el);
+});
+
+let count = 0;
+
+function comboString(e) {
+  const parts = [];
+  if (e.metaKey) parts.push('meta');
+  if (e.ctrlKey) parts.push('ctrl');
+  if (e.shiftKey) parts.push('shift');
+  if (e.altKey) parts.push('alt');
+  if (!['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) parts.push(e.key.toLowerCase());
+  return parts.join('+');
+}
+
+function displayString(e) {
+  const parts = [];
+  if (e.metaKey) parts.push(isMac ? '\u2318' : 'Meta');
+  if (e.ctrlKey) parts.push('Ctrl');
+  if (e.shiftKey) parts.push(isMac ? '\u21e7' : 'Shift');
+  if (e.altKey) parts.push(isMac ? '\u2325' : 'Alt');
+  if (!['Meta', 'Control', 'Shift', 'Alt'].includes(e.key)) {
+    parts.push(e.key === ' ' ? 'Space' : e.key === 'Enter' ? 'Enter' : e.key.toUpperCase());
+  }
+  return parts.join(isMac ? '' : ' + ');
+}
+
+window.addEventListener('keydown', (e) => {
+  const combo = comboString(e);
+  const display = displayString(e);
+  const conflict = knownConflicts[combo];
+
+  // Update current display
+  const el = document.getElementById('current');
+  el.classList.add('active');
+  setTimeout(() => el.classList.remove('active'), 200);
+  document.getElementById('display').textContent = display || e.key;
+  document.getElementById('raw').textContent = `key: "${e.key}" | code: "${e.code}" | combo: "${combo}"`;
+  document.getElementById('m-meta').className = `mod-badge${e.metaKey ? ' on' : ''}`;
+  document.getElementById('m-ctrl').className = `mod-badge${e.ctrlKey ? ' on' : ''}`;
+  document.getElementById('m-shift').className = `mod-badge${e.shiftKey ? ' on' : ''}`;
+  document.getElementById('m-alt').className = `mod-badge${e.altKey ? ' on' : ''}`;
+
+  // Check app shortcuts
+  appShortcuts.forEach((sc, i) => {
+    const el = document.getElementById(`sc-${i}`);
+    if (sc.test(e)) {
+      el.classList.add('matched');
+      setTimeout(() => el.classList.remove('matched'), 1500);
+    }
+  });
+
+  // Log
+  count++;
+  const row = document.createElement('tr');
+  row.innerHTML = `
+    <td>${count}</td>
+    <td style="font-weight:600">${display}</td>
+    <td>${e.key}</td>
+    <td>${e.code}</td>
+    <td class="${conflict ? 'conflict' : 'safe'}">${conflict || 'No conflict'}</td>
+  `;
+  const body = document.getElementById('log-body');
+  body.insertBefore(row, body.firstChild);
+});
+</script>
+</body>
+</html>

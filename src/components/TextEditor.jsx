@@ -585,10 +585,10 @@ export default function TextEditor() {
             if (jsonMatch) {
               const parsed = JSON.parse(jsonMatch[0]);
               setSuggestions(parsed.map((s, i) => ({ ...s, id: i, status: 'pending', type: s.type?.replace(/_/g, '-') })));
-            } else alert(t('failedToParse'));
-          } catch (e) { console.error('[parse]', e, content); alert(t('failedToParse')); }
+            } else console.warn('[runAll] analyze: no JSON array found in response');
+          } catch (e) { console.error('[parse]', e, content); }
         })
-        .catch((e) => { console.error('[analyze]', e); alert(t('failedToAnalyze')); })
+        .catch((e) => { console.error('[analyze]', e); })
         .finally(() => setIsAnalyzing(false)),
 
       rewriteViaProxy(selectedModel, text, clientKeys)
