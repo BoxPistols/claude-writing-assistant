@@ -1144,8 +1144,8 @@ export default function TextEditor() {
               {(isAnalyzing || isRewriting)
                 ? (<><Loader2 style={{ width: 16, height: 16 }} className="animate-spin-slow" />
                     {isAnalyzing && isRewriting ? `${t('analyzing')} & ${t('rewriting')}` : isAnalyzing ? t('analyzing') : t('rewriting')}
-                    <span style={{ fontSize: 11, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>
-                      {Math.floor(elapsedSecs / 60)}:{String(elapsedSecs % 60).padStart(2, '0')}
+                    <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginLeft: 4 }}>
+                      {Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%
                     </span></>)
                 : (<><Sparkles style={{ width: 15, height: 15 }} /><Wand2 style={{ width: 15, height: 15 }} />{t('runAll')}
                     <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 4 }}>{formatShortcut(shortcuts.runAll.parts)}</span></>)}
@@ -1173,7 +1173,7 @@ export default function TextEditor() {
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
                 {isAnalyzing
                   ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('analyzing')}
-                      <span style={{ fontSize: 10, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{elapsedSecs}s</span></>)
+                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
                   : (<><Sparkles style={{ width: 14, height: 14 }} />{t('analyzeText')}
                       <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.analyze.parts)}</span></>)}
               </button>
@@ -1187,7 +1187,7 @@ export default function TextEditor() {
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
                 {isRewriting
                   ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('rewriting')}
-                      <span style={{ fontSize: 10, opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>{elapsedSecs}s</span></>)
+                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
                   : (<><Wand2 style={{ width: 14, height: 14 }} />{t('rewriteAI')}
                       <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.rewrite.parts)}</span></>)}
               </button>
