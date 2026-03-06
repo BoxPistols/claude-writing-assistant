@@ -1,6 +1,17 @@
 import crypto from 'crypto';
 import { setCorsHeaders } from './_shared.js';
 
+function parseBody(req) {
+  if (req.body == null) return {};
+  if (Buffer.isBuffer(req.body)) {
+    try { return JSON.parse(req.body.toString('utf8')); } catch { return {}; }
+  }
+  if (typeof req.body === 'string') {
+    try { return JSON.parse(req.body); } catch { return {}; }
+  }
+  return req.body;
+}
+
 export default function handler(req, res) {
   setCorsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(200).end();
@@ -9,8 +20,7 @@ export default function handler(req, res) {
   const expected = process.env.BASIC_AUTH_PASSWORD;
   if (!expected) return res.status(200).json({ ok: true });
 
-  const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
-  const { password } = body;
+  const { password } = parseBody(req);
 
   if (password !== expected) {
     return res.status(401).json({ error: 'Invalid password' });
