@@ -44,7 +44,7 @@ catch(x){err.textContent='接続エラー';err.style.display='block';btn.disable
 </script></body></html>`;
 
 export default async function middleware(request) {
-  const password = process.env.BASIC_AUTH_PASSWORD;
+  const password = (process.env.BASIC_AUTH_PASSWORD || '').trim();
   if (!password) return; // 未設定なら認証スキップ
 
   const url = new URL(request.url);

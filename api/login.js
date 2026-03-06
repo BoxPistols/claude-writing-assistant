@@ -17,13 +17,14 @@ export default function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const expected = process.env.BASIC_AUTH_PASSWORD;
+  const expected = (process.env.BASIC_AUTH_PASSWORD || '').trim();
   if (!expected) return res.status(200).json({ ok: true });
 
   const { password } = parseBody(req);
+  const input = (password || '').trim();
 
-  if (password !== expected) {
-    return res.status(401).json({ error: 'Invalid password' });
+  if (input !== expected) {
+    return res.status(401).json({ error: 'Invalid password', debug: { inputLen: input.length, expectedLen: expected.length } });
   }
 
   const token = crypto.createHash('sha256').update(expected).digest('hex');
