@@ -22,8 +22,8 @@ const SAMPLE_TEXT = `AIは近年急速に発展しており、多くの分野で
 
 // モデル一覧（models.jsと同期）
 const MODELS = [
-  { id: 'gpt-4.1-nano', provider: 'openai' },
-  { id: 'gpt-4.1-mini', provider: 'openai' },
+  { id: 'gpt-5.4-nano', provider: 'openai' },
+  { id: 'gpt-5.4-mini', provider: 'openai' },
   { id: 'claude-haiku-4-5-20251001', provider: 'anthropic' },
   { id: 'claude-sonnet-4-5-20250929', provider: 'anthropic' },
   { id: 'gemini-2.5-flash', provider: 'gemini' },
