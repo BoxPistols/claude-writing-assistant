@@ -77,10 +77,10 @@ const CAT_STYLES = {
 };
 
 const analyzeViaProxy = async (model, text, clientKeys, customInstruction = '') => {
-  const customPart = customInstruction.trim()
-    ? `\n\nAdditional instructions from the user: ${customInstruction.trim()}`
-    : '';
   const isJa = locale.startsWith('ja');
+  const customPart = customInstruction.trim()
+    ? `\n\n${isJa ? 'ユーザーからの追加指示' : 'Additional instructions from the user'}: ${customInstruction.trim()}`
+    : '';
   const userPrompt = isJa
     ? `あなたはプロの日本語編集者です。以下の文章を分析し、改善提案を提示してください。${customPart}
 
@@ -203,7 +203,7 @@ const rewriteViaProxy = async (model, text, clientKeys) => {
 - 羅針盤・土台・エンジン・設計図・架け橋等の使い古された比喩を使わない
 - 評価語（「非常に重要です」「大きなメリット」「画期的な」）には根拠を伴わせるか削る
 - 「〜における」「〜に関して」を多用しない。もっと短く言い換える
-- 漠然と明るい結論（「今後の発展が期待されます」「未来は明るい」）を避け、具体的に閉じる
+- 漠然と明るい結論（「今後の発展が期待されます」「未来は明るい」等）がAI的な定型表現である場合は、元の意図を保ちつつ具体的な結びに言い換える（意味やトーンが変わる場合は無理に変えない）
 
 【出力形式】
 書き換え後の文章だけを出力する。説明・前置き・注意書きは一切出力しない。
@@ -245,9 +245,9 @@ Content & Style:
 - Mix short and long sentences for varied rhythm. Vary paragraph lengths
 - No formulaic closings ("I hope this helps", "Feel free to reach out", "The future looks bright")
 - Avoid cliché metaphors (compass, foundation, engine, blueprint, bridge, tapestry)
-- No "Challenges and Future Prospects" template sections
-- Back up strong evaluations with evidence or cut them
-- No promotional language ("groundbreaking", "breathtaking", "stunning", "vibrant")
+- No "Challenges and Future Prospects" template sections when they are AI-filler (preserve if the original genuinely discusses challenges/prospects)
+- Back up strong evaluations with evidence or cut them, only when they are clearly AI-generated filler
+- No promotional language ("groundbreaking", "breathtaking", "stunning", "vibrant") unless it reflects the original author's intent
 
 Output: Output ONLY the rewritten text. No explanation, preamble, or notes.
 
