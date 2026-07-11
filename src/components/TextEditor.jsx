@@ -274,6 +274,113 @@ ${text}`;
   return res.json();
 };
 
+/* ─── Compose（文脈整形）用プロンプト本文 ─────────
+   下書き・背景・目的セクションは composeViaProxy で末尾に付加する。
+   プロンプトはジャッジパネル（構成再設計 / 目的適合 / 忠実性の3案統合）で設計。 */
+const COMPOSE_PROMPT_JA = `あなたは日本語の編集者です。この後に示す未整理の【下書き】を、【背景・状況】と【目的・ゴール】に沿って、人間が書いた自然な一本の文章に再構成してください。下書きは音声入力などの走り書きを想定しています。誤字直しや語尾の整えではなく、構成そのものを設計し直すことが主な仕事です。同じ下書きでも、背景や目的が違えば書くべき文章は変わります。たとえば目的が上司への謝罪と報告なら丁寧な報告と対応策の文書に、チームへの共有なら簡潔な状況共有に、というように、構成・語彙・トーン・敬体/常体を読み手と目的に合わせて組み立て直してください。
+
+【最優先：構成を組み立て直す】
+- 【下書き】は、順序も粒度もバラついた素材とみなす。書かれた並び順に縛られない。
+- 【目的・ゴール】を最短で果たす順序・段落・論理展開を先に決めてから書く。何を冒頭に置き、何を根拠や補足として後段へ回すかを設計する。
+- 目的の型に必要な要素を満たす。おおよその骨組みは次を目安にする。
+  - 謝罪・お詫び：お詫び→状況と原因→対応策→今後の見通し。相手を気づかう一言を添える。
+  - 依頼・相談：用件（結論）→理由・背景→具体的な依頼内容→期限や希望。
+  - 報告・共有：結論→要点→次のアクションや懸念。
+  - 告知・案内：何を・いつ・どこで・誰に→してほしい行動。
+  - SNS・投稿：要点を1つに絞り、短く口語で。
+- 話が飛ぶ箇所は自然な繋ぎを補い、重複・脱線・独り言や、目的に照らして不要な情報は削る。
+
+【背景と目的の反映】
+- 【背景・状況】から、誰が誰に向けて・どんな関係と場面かを読み取り、敬語レベルとトーンを決める。目上・社外はより丁寧に、同僚・チーム内は簡潔にする。相手名・締切・経緯など具体情報は文章に活かす。
+- 【目的・ゴール】から、文書の型（メール／チャット共有／報告／依頼など）と着地点を決め、構成と情報の並び順を組み立てる。
+- 【背景・状況】の記載がなければ、下書きの語彙や文体から相手と場面を推定する。【目的・ゴール】の記載がなければ、その下書きが最も自然に果たす意図を1つ推定して構成する。どのセクションが省略されても破綻させない。
+
+【事実への忠実さ】
+- 下書きにない事実・数字・固有名詞・日付・約束を足さない。書かれていないことを創作しない。
+- 誇張や脚色をせず、下書きの主張の強さや温度感を勝手に上げ下げしない。
+- 情報が足りなくても、埋めるために内容を作らない。文をつなぐ言い換えや自然な言い回しなど、意味を変えない範囲の補完にとどめる。読み取りにくい箇所は最も自然な解釈を1つ選び、事実として断定しすぎない。
+
+【文体】
+- 敬体（です・ます）か常体（だ・である）かは、目的と読み手にふさわしい方へ全体を統一する。下書きの混在に引きずられない。手がかりがなければ下書きで多い方に合わせる。
+- Markdown記法や装飾記号を使わない（**太字**、#見出し、箇条書き記号、絵文字など）。チャット共有など箇条書きが自然な形式では、記号を使わない短い行の列挙にとどめる。
+
+【自然な日本語（AIっぽさを消す）】
+- 「さらに」「また」「したがって」「そのため」などの接続詞を多用しない。
+- 「最適化」「本質」「エコシステム」などの抽象語は、何がどうなるかが伝わる具体表現に言い換える。
+- not A but B 構文（〜ではなく〜です）、3語の並列（ルール・オブ・スリー）、同じ語尾の3連続を避ける。短い文と長い文を混ぜてリズムをつける。
+- 「〜することができます」→「〜できます」のように冗長表現を簡潔にする。
+- 「以下では説明します」などの前置きや「参考になれば幸いです」などの中身のない締めを入れない。ただしメールなど目的上必要な宛名・挨拶・結びは自然な範囲で残す。
+
+【出力】
+- 再構成後の本文だけを出力する。説明・前置き・注記・見出しラベル・セクション名は一切出力しない。「件名：」のようなラベルは付けず、そのまま貼り付けられる本文に仕上げる。`;
+
+const COMPOSE_PROMPT_EN = `You are a Japanese-language editor. Reconstruct the unstructured [Draft] shown below into a single, natural piece of writing that reads as if a human wrote it, following the [Background/Situation] and [Purpose/Goal]. The draft is assumed to be rough notes, such as from voice input. Your main job is to redesign the structure itself, not to fix typos or smooth sentence endings. The same draft should become different writing when the background or purpose differs: for example, if the purpose is an apology and report to a manager, produce a polite report with a plan of action; if it is a quick share to the team, produce a concise status update. Rebuild the structure, wording, tone, and formality (polite/plain form) to fit the reader and the purpose.
+
+[Top priority: rebuild the structure]
+- Treat the [Draft] as raw material whose order and level of detail are uneven. Do not be bound by the order in which it was written.
+- Before writing, decide the sequence, paragraphs, and logical flow that achieve the [Purpose/Goal] most directly. Decide what goes first and what moves later as supporting detail.
+- Satisfy the elements the purpose requires. Use these skeletons as a guide:
+  - Apology: apology -> situation and cause -> corrective action -> outlook. Add a line of consideration for the reader.
+  - Request/consultation: the ask (conclusion) -> reason/background -> specific request -> deadline or preference.
+  - Report/share: conclusion -> key points -> next actions or concerns.
+  - Announcement: what, when, where, to whom -> the action you want.
+  - Social post: narrow to one point; keep it short and conversational.
+- Add natural transitions where the thread jumps, and cut repetition, digressions, muttering, and anything the purpose does not need.
+
+[Reflecting background and purpose]
+- From [Background/Situation], read who is writing to whom and in what relationship and setting, and set the level of politeness and tone. Be more polite for superiors and external parties; be concise within a team. Use concrete details such as names, deadlines, and history.
+- From [Purpose/Goal], decide the document type (email / chat share / report / request, etc.) and its landing point, and build the structure and order of information.
+- If [Background/Situation] is not given, infer the reader and setting from the draft's vocabulary and style. If [Purpose/Goal] is not given, infer the single most natural intent the draft serves and structure around it. Never break down when a section is omitted.
+
+[Fidelity to facts]
+- Do not add facts, numbers, proper nouns, dates, or commitments that are not in the draft. Do not invent what is not written.
+- Do not exaggerate or embellish, and do not raise or lower the strength or emotional temperature of the draft's claims.
+- Even when information is missing, do not fabricate content to fill gaps. Limit completion to rewording and natural phrasing that connect sentences without changing meaning. Where the intent is unclear, choose the single most natural reading and avoid asserting it too firmly as fact.
+
+[Style]
+- Unify the whole text into either polite form (desu/masu) or plain form (da/dearu), whichever suits the purpose and reader; do not be dragged by mixed forms in the draft. If there is no clue, follow whichever is more common in the draft.
+- Do not use Markdown or decorative symbols (**bold**, # headings, bullet markers, emoji). In formats where bullets are natural, such as a chat share, use short lines without symbols.
+
+[Natural Japanese (removing the AI feel)]
+- Do not overuse conjunctions such as "furthermore," "also," "therefore," "for that reason."
+- Replace abstract words such as "optimize," "essence," "ecosystem" with concrete expressions that convey what actually changes.
+- Avoid the "not A but B" construction, three-item parallels (rule of three), and three identical sentence endings in a row. Mix short and long sentences for rhythm.
+- Simplify wordy expressions (e.g., "is able to do" -> "can do").
+- Do not add preambles like "The following explains..." or empty closings like "I hope this helps." However, keep the salutation, greeting, and closing that the purpose genuinely requires, such as in an email, within a natural range.
+
+[Output]
+- Output only the reconstructed body text. Do not output any explanation, preamble, notes, heading labels, or section names. Do not add labels like "Subject:"; produce body text ready to paste as is.`;
+
+const composeViaProxy = async (model, text, clientKeys, { background = '', purpose = '' } = {}) => {
+  const isJa = locale.startsWith('ja');
+  const instructions = isJa ? COMPOSE_PROMPT_JA : COMPOSE_PROMPT_EN;
+  const bg = background.trim();
+  const pp = purpose.trim();
+  // 背景・目的は入力がある時だけセクションとして付加（空欄でも破綻しない設計）
+  const bgSection = bg ? (isJa ? `\n\n【背景・状況】\n${bg}` : `\n\n[Background/Situation]\n${bg}`) : '';
+  const ppSection = pp ? (isJa ? `\n\n【目的・ゴール】\n${pp}` : `\n\n[Purpose/Goal]\n${pp}`) : '';
+  const draftLabel = isJa ? '【下書き】' : '[Draft]';
+  const prompt = `${instructions}${bgSection}${ppSection}\n\n${draftLabel}\n${text}`;
+
+  const res = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      clientKeys,
+      maxTokens: 16000,
+    }),
+  });
+
+  if (!res.ok) {
+    let detail = '';
+    try { const err = await res.json(); detail = err.error || ''; } catch {}
+    throw new Error(detail || `API error: ${res.status}`);
+  }
+  return res.json();
+};
+
 /* ─── Speed/Quality dots ───────────────────────── */
 function Dots({ count, max = 5, color }) {
   return (
@@ -425,11 +532,22 @@ export default function TextEditor() {
   const [customInstruction, setCustomInstruction] = useState(() => {
     try { return localStorage.getItem('wa-custom-instruction') || ''; } catch { return ''; }
   });
+  // 文脈整形（compose）用の背景・目的・パネル開閉状態
+  const [background, setBackground] = useState(() => {
+    try { return localStorage.getItem('wa-compose-bg') || ''; } catch { return ''; }
+  });
+  const [purpose, setPurpose] = useState(() => {
+    try { return localStorage.getItem('wa-compose-purpose') || ''; } catch { return ''; }
+  });
+  // 文脈整形はモーダルで開く（メインの編集エリアを圧迫しないため）
+  const [composeModalOpen, setComposeModalOpen] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [activeCategory, setActiveCategory] = useState('all');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isRewriting, setIsRewriting] = useState(false);
   const [rewriteResult, setRewriteResult] = useState(null);
+  const [composeResult, setComposeResult] = useState(null);
+  const [isComposing, setIsComposing] = useState(false);
   const [isModalMaximized, setIsModalMaximized] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
@@ -501,12 +619,12 @@ export default function TextEditor() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const isOpen = !!rewriteResult;
+    const isOpen = !!(rewriteResult || composeResult || composeModalOpen);
     if (!isOpen) return;
-    const handleKey = (e) => { if (e.key === 'Escape') setRewriteResult(null); };
+    const handleKey = (e) => { if (e.key === 'Escape') { setRewriteResult(null); setComposeResult(null); if (!isComposing) setComposeModalOpen(false); } };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [rewriteResult]);
+  }, [rewriteResult, composeResult, composeModalOpen, isComposing]);
 
   useEffect(() => {
     try { localStorage.setItem('wa-model', selectedModel); } catch {}
@@ -523,6 +641,9 @@ export default function TextEditor() {
   useEffect(() => {
     try { localStorage.setItem('wa-custom-instruction', customInstruction); } catch {}
   }, [customInstruction]);
+
+  useEffect(() => { try { localStorage.setItem('wa-compose-bg', background); } catch {} }, [background]);
+  useEffect(() => { try { localStorage.setItem('wa-compose-purpose', purpose); } catch {} }, [purpose]);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -698,6 +819,27 @@ export default function TextEditor() {
     } finally { setIsRewriting(false); stopProgress(); }
   }, [resolveModel, clientKeys, startProgress, stopProgress, checkRateLimit]);
 
+  const handleCompose = useCallback(async () => {
+    const text = editorRef.current?.innerText?.trim();
+    if (!text) { alert(t('pleaseEnterText')); return; }
+    if (!checkRateLimit()) return;
+
+    const modelId = resolveModel(text.length);
+    setIsComposing(true);
+    setSuggestions([]);
+    startProgress(modelId, text.length);
+    try {
+      const data = await composeViaProxy(modelId, text, clientKeys, { background, purpose });
+      recordUsage(); setRemaining(getRemaining());
+      const composed = data.content?.[0]?.text?.trim() || '';
+      if (composed) { setComposeResult({ original: text, rewritten: composed }); setComposeModalOpen(false); }
+      else alert(t('failedToCompose'));
+    } catch (e) {
+      console.error('Compose error:', e);
+      alert(e.message?.includes('401') ? t('failedUnauthorized') : t('failedToCompose'));
+    } finally { setIsComposing(false); stopProgress(); }
+  }, [resolveModel, clientKeys, background, purpose, startProgress, stopProgress, checkRateLimit]);
+
   const handleRunAll = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
     if (!text) { alert(t('pleaseEnterText')); return; }
@@ -752,15 +894,20 @@ export default function TextEditor() {
     if (pendingRewrite) setRewriteResult(pendingRewrite);
   }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress]);
 
-  const applyRewrite = useCallback(() => {
-    if (rewriteResult && editorRef.current) {
+  // rewrite / compose 両方の結果モーダルで共用
+  const applyResult = useCallback(() => {
+    const data = rewriteResult || composeResult;
+    if (data && editorRef.current) {
       snapshot(); // Undo用にスナップショット
-      editorRef.current.innerText = rewriteResult.rewritten;
+      editorRef.current.innerText = data.rewritten;
       refreshEditorContent();
       setSuggestions([]);
     }
     setRewriteResult(null);
-  }, [rewriteResult, refreshEditorContent, snapshot]);
+    setComposeResult(null);
+  }, [rewriteResult, composeResult, refreshEditorContent, snapshot]);
+
+  const closeResult = useCallback(() => { setRewriteResult(null); setComposeResult(null); }, []);
 
   const applySuggestion = useCallback((suggestion) => {
     if (!editorRef.current) return;
@@ -907,6 +1054,10 @@ export default function TextEditor() {
   }, [recordingAction, shortcuts]);
 
   const closeDropdown = useCallback(() => setOpenDropdown(null), []);
+
+  // 結果モーダル（rewrite / compose 共用）の現在値
+  const activeResult = rewriteResult || composeResult;
+  const activeKind = rewriteResult ? 'rewrite' : (composeResult ? 'compose' : null);
 
   return (
     <div className="grain" style={{ minHeight: '100vh', background: 'var(--bg-primary)', color: 'var(--text-primary)', transition: 'background 0.3s, color 0.3s' }}>
@@ -1229,6 +1380,31 @@ export default function TextEditor() {
               </div>
             </div>
 
+          </div>
+
+          {/* Compose（文脈整形）: メインエリアを圧迫しない1行トリガー。クリックでモーダルを開く */}
+          <div style={{ padding: '14px 24px 0' }}>
+            <div className="compose-card">
+              <button
+                onClick={() => setComposeModalOpen(true)}
+                aria-haspopup="dialog"
+                title={t('composeModeDesc')}
+                className="compose-toggle">
+                <span className="compose-icon">
+                  <Feather style={{ width: 19, height: 19 }} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{t('composeMode')}</span>
+                    <span className="compose-badge">{t('composeBadge')}</span>
+                  </span>
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('composeModeDesc')}</span>
+                </span>
+                <span className="compose-chevron" aria-hidden="true">
+                  <ChevronDown style={{ width: 18, height: 18, transform: 'rotate(-90deg)' }} />
+                </span>
+              </button>
+            </div>
           </div>
 
           {/* Custom Instruction */}
@@ -1603,8 +1779,109 @@ export default function TextEditor() {
         </div>
       )}
 
-      {/* ─── AI Rewrite Result Dialog ─────────────── */}
-      {rewriteResult && (
+      {/* ─── 文脈整形 入力ダイアログ（背景・目的） ─────────────── */}
+      {composeModalOpen && (
+        <div className="modal-backdrop" onClick={() => { if (!isComposing) setComposeModalOpen(false); }}>
+          <div
+            style={{
+              background: 'var(--bg-surface)', border: '1px solid var(--border-primary)',
+              boxShadow: 'var(--shadow-lg)', borderRadius: 'var(--radius-lg)',
+              width: 560, maxWidth: 'calc(100vw - 24px)', maxHeight: '88vh',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
+              animation: 'fadeInUp 0.25s ease-out',
+            }}
+            onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '18px 22px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <span className="compose-icon" style={{ width: 34, height: 34 }}><Feather style={{ width: 17, height: 17 }} /></span>
+                <div style={{ minWidth: 0 }}>
+                  <h3 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 21, fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.15 }}>{t('composeMode')}</h3>
+                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('composeModeDesc')}</p>
+                </div>
+              </div>
+              <button onClick={() => setComposeModalOpen(false)} className="toolbar-btn" style={{ width: 28, height: 28, flexShrink: 0 }}>
+                <X style={{ width: 16, height: 16 }} />
+              </button>
+            </div>
+            {/* Body (scroll) */}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {/* 背景・状況 */}
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 8 }}>{t('composeBackground')}</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+                  {(t('composeBackgroundTemplates') || []).map((tmpl) => (
+                    <button key={tmpl.label}
+                      onClick={() => setBackground(background === tmpl.text ? '' : tmpl.text)}
+                      style={{
+                        padding: '4px 11px', fontSize: 12, fontWeight: 500,
+                        border: '1px solid var(--border-primary)', borderRadius: 20,
+                        background: background === tmpl.text ? 'var(--accent)' : 'var(--bg-secondary)',
+                        color: background === tmpl.text ? '#fff' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                      }}>
+                      {tmpl.label}
+                    </button>
+                  ))}
+                </div>
+                <textarea value={background} onChange={(e) => setBackground(e.target.value)} placeholder={t('composeBackgroundPlaceholder')} rows={3}
+                  style={{ width: '100%', padding: '9px 12px', fontSize: 13, border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5, fontFamily: 'inherit', transition: 'border-color 0.15s' }}
+                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')} onBlur={(e) => (e.target.style.borderColor = 'var(--border-primary)')} />
+              </div>
+              {/* 目的・ゴール */}
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 8 }}>{t('composePurpose')}</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+                  {(t('composePurposeTemplates') || []).map((tmpl) => (
+                    <button key={tmpl.label}
+                      onClick={() => setPurpose(purpose === tmpl.text ? '' : tmpl.text)}
+                      style={{
+                        padding: '4px 11px', fontSize: 12, fontWeight: 500,
+                        border: '1px solid var(--border-primary)', borderRadius: 20,
+                        background: purpose === tmpl.text ? 'var(--accent)' : 'var(--bg-secondary)',
+                        color: purpose === tmpl.text ? '#fff' : 'var(--text-secondary)',
+                        cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                      }}>
+                      {tmpl.label}
+                    </button>
+                  ))}
+                </div>
+                <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder={t('composePurposePlaceholder')} rows={3}
+                  style={{ width: '100%', padding: '9px 12px', fontSize: 13, border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5, fontFamily: 'inherit', transition: 'border-color 0.15s' }}
+                  onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')} onBlur={(e) => (e.target.style.borderColor = 'var(--border-primary)')} />
+              </div>
+              {isComposing && estimatedSecs > 0 && (
+                <div style={{ height: 3, borderRadius: 2, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 2, background: 'var(--accent)', width: `${Math.min(95, (elapsedSecs / estimatedSecs) * 100)}%`, transition: 'width 1s linear' }} />
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '14px 22px', borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>{charCount.toLocaleString()} {t('characters')}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={() => setComposeModalOpen(false)} disabled={isComposing}
+                  style={{ padding: '8px 16px', fontSize: 13, fontWeight: 500, borderRadius: 'var(--radius)', border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-secondary)', cursor: isComposing ? 'default' : 'pointer' }}>
+                  {t('cancel')}
+                </button>
+                <button onClick={handleCompose} disabled={isComposing}
+                  className={isComposing ? 'animate-shimmer' : ''}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minWidth: 180, padding: '9px 20px', fontSize: 13, fontWeight: 600, color: '#fff', background: isComposing ? undefined : 'var(--accent)', border: 'none', borderRadius: 'var(--radius)', cursor: isComposing ? 'wait' : 'pointer', transition: 'background 0.2s' }}
+                  onMouseEnter={(e) => { if (!isComposing) e.currentTarget.style.background = 'var(--accent-hover)'; }}
+                  onMouseLeave={(e) => { if (!isComposing) e.currentTarget.style.background = 'var(--accent)'; }}>
+                  {isComposing
+                    ? (<><Loader2 style={{ width: 15, height: 15 }} className="animate-spin-slow" />{t('composing')}
+                        <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
+                    : (<><Feather style={{ width: 15, height: 15 }} />{t('composeButton')}</>)}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Rewrite / Compose 結果ダイアログ（共用） ─────────────── */}
+      {activeResult && (
         <div className="modal-backdrop">
           <div
             style={{
@@ -1619,22 +1896,25 @@ export default function TextEditor() {
             }}>
             <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)' }}>
               <h3 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
-                <Wand2 style={{ width: 18, height: 18, color: 'var(--cat-ai-writing)' }} />{t('rewriteDialogTitle')}
+                {activeKind === 'compose'
+                  ? <Feather style={{ width: 18, height: 18, color: 'var(--accent)' }} />
+                  : <Wand2 style={{ width: 18, height: 18, color: 'var(--cat-ai-writing)' }} />}
+                {activeKind === 'compose' ? t('composeDialogTitle') : t('rewriteDialogTitle')}
               </h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                 <button onClick={() => setIsModalMaximized((v) => !v)}
                   className="toolbar-btn" title={isModalMaximized ? '元のサイズ' : '最大化'} style={{ width: 28, height: 28 }}>
                   {isModalMaximized ? <Minimize2 style={{ width: 15, height: 15 }} /> : <Maximize2 style={{ width: 15, height: 15 }} />}
                 </button>
-                <button onClick={() => setRewriteResult(null)} className="toolbar-btn" title="閉じる" style={{ width: 28, height: 28 }}>
+                <button onClick={closeResult} className="toolbar-btn" title="閉じる" style={{ width: 28, height: 28 }}>
                   <X style={{ width: 16, height: 16 }} />
                 </button>
               </div>
             </div>
             <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', overflow: 'hidden' }}>
               {[
-                { label: t('rewriteBefore'), text: rewriteResult.original, accent: 'var(--cat-spelling)' },
-                { label: t('rewriteAfter'), text: rewriteResult.rewritten, accent: 'var(--cat-ai-writing)' },
+                { label: activeKind === 'compose' ? t('composeBefore') : t('rewriteBefore'), text: activeResult.original, accent: 'var(--cat-spelling)' },
+                { label: activeKind === 'compose' ? t('composeAfter') : t('rewriteAfter'), text: activeResult.rewritten, accent: activeKind === 'compose' ? 'var(--accent)' : 'var(--cat-ai-writing)' },
               ].map(({ label, text, accent }, i) => (
                 <div key={label} style={{ display: 'flex', flexDirection: 'column', borderRight: i === 0 ? '1px solid var(--border-subtle)' : 'none', minHeight: 0 }}>
                   <div style={{ flexShrink: 0, padding: '9px 20px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-toolbar)' }}>
@@ -1647,15 +1927,15 @@ export default function TextEditor() {
               ))}
             </div>
             <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)' }}>
-              <button onClick={() => setRewriteResult(null)}
+              <button onClick={closeResult}
                 style={{ padding: '8px 18px', fontSize: 13, fontWeight: 500, borderRadius: 'var(--radius)', border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                 {t('cancel')}
               </button>
-              <button onClick={applyRewrite}
-                style={{ padding: '8px 20px', fontSize: 13, fontWeight: 600, borderRadius: 'var(--radius)', border: 'none', background: 'var(--cat-ai-writing)', color: '#fff', cursor: 'pointer', transition: 'opacity 0.15s' }}
+              <button onClick={applyResult}
+                style={{ padding: '8px 20px', fontSize: 13, fontWeight: 600, borderRadius: 'var(--radius)', border: 'none', background: activeKind === 'compose' ? 'var(--accent)' : 'var(--cat-ai-writing)', color: '#fff', cursor: 'pointer', transition: 'opacity 0.15s' }}
                 onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
                 onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}>
-                {t('applyRewrite')}
+                {activeKind === 'compose' ? t('applyCompose') : t('applyRewrite')}
               </button>
             </div>
           </div>
