@@ -11,7 +11,7 @@ import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, PROVIDERS, getModel, autoSelectMode
 import { SAMPLES } from '../config/samples';
 import { useUndoRedo } from '../hooks/useUndoRedo';
 import { useTextToSpeech } from '../hooks/useTextToSpeech';
-import TtsSettings from './TtsSettings';
+import TtsSettings, { TtsSettingsForm } from './TtsSettings';
 import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEvent, matchShortcut, DEFAULT_SHORTCUTS } from '../utils/platform';
 import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT, hasUserKeys } from '../utils/rateLimit';
 
@@ -1663,7 +1663,7 @@ export default function TextEditor() {
       {/* ─── API Key Settings Dialog ─────────────── */}
       {showSettingsDialog && (
         <div className="modal-backdrop" onClick={() => setShowSettingsDialog(false)}>
-          <div className="modal-panel" style={{ width: 440 }} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-panel" style={{ width: 440, maxHeight: '85vh', overflowY: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
               <h3 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Key style={{ width: 18, height: 18, color: 'var(--accent)' }} /> API Keys
@@ -1737,6 +1737,15 @@ export default function TextEditor() {
                 )}
               </div>
             ))}
+
+            {/* ─── Voice Reader（音声読み上げ） ─────────────── */}
+            <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+              <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Volume2 style={{ width: 14, height: 14, color: 'var(--accent)' }} />
+                {t('ttsSection')}
+              </h4>
+              <TtsSettingsForm tts={tts} />
+            </div>
 
             {/* ─── Keyboard Shortcuts ─────────────── */}
             <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>

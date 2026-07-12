@@ -7,9 +7,13 @@ const TTS_KEY = 'wa-tts';
 const DEFAULTS = {
   engine: 'browser',                       // 'browser' | 'voicevox'
   voiceURI: '',                            // ブラウザ音声の voiceURI
-  rate: 1.0,                               // 再生速度
+  rate: 1.0,                               // 再生速度（共通）
+  pitch: 1.0,                              // ブラウザ音声のピッチ (0.5-2)
   voicevoxUrl: 'http://localhost:50021',   // VOICEVOX エンジンのエンドポイント
   speaker: 3,                              // VOICEVOX の話者ID
+  vvPitch: 0,                              // VOICEVOX pitchScale (-0.15〜0.15)
+  vvIntonation: 1.0,                       // VOICEVOX intonationScale (0〜2)
+  vvVolume: 1.0,                           // VOICEVOX volumeScale (0〜2)
 };
 
 const loadSettings = () => {
@@ -70,12 +74,13 @@ export function useTextToSpeech() {
       const u = new SpeechSynthesisUtterance(part);
       if (voice) u.voice = voice;
       u.rate = settings.rate;
+      u.pitch = settings.pitch;
       u.onend = () => { i += 1; next(); };
       u.onerror = () => { i += 1; next(); };
       synth.speak(u);
     };
     setTimeout(next, CANCEL_DELAY);
-  }, [supported, voices, settings.voiceURI, settings.rate]);
+  }, [supported, voices, settings.voiceURI, settings.rate, settings.pitch]);
 
   // VOICEVOX: audio_query → synthesis の2段で WAV を取得し再生
   const speakVoicevox = useCallback(async (text, id) => {
@@ -87,7 +92,11 @@ export function useTextToSpeech() {
       const qRes = await fetch(`${base}/audio_query?text=${encodeURIComponent(text)}&speaker=${spk}`, { method: 'POST' });
       if (!qRes.ok) throw new Error(`audio_query ${qRes.status}`);
       const query = await qRes.json();
-      query.speedScale = settings.rate; // 速度はネイティブ指定（ピッチを変えない）
+      // パラメータをネイティブ指定
+      query.speedScale = settings.rate;
+      query.pitchScale = settings.vvPitch;
+      query.intonationScale = settings.vvIntonation;
+      query.volumeScale = settings.vvVolume;
       const sRes = await fetch(`${base}/synthesis?speaker=${spk}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
