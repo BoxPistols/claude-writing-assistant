@@ -4,12 +4,14 @@ import {
   Bold, Italic, Underline, Link, AlignLeft, AlignCenter,
   AlignRight, List, ListOrdered, Outdent, Indent,
   Type, Highlighter, MoveVertical, MoveHorizontal, RotateCcw, Feather, ChevronDown, Settings, Key, Eye, EyeOff, Wand2, Maximize2, Minimize2,
-  Undo2, Redo2,
+  Undo2, Redo2, Volume2, Square,
 } from 'lucide-react';
 import { t, locale } from '../locales';
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, PROVIDERS, getModel, autoSelectModel } from '../config/models';
 import { SAMPLES } from '../config/samples';
 import { useUndoRedo } from '../hooks/useUndoRedo';
+import { useTextToSpeech } from '../hooks/useTextToSpeech';
+import TtsSettings from './TtsSettings';
 import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEvent, matchShortcut, DEFAULT_SHORTCUTS } from '../utils/platform';
 import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT, hasUserKeys } from '../utils/rateLimit';
 
@@ -592,6 +594,7 @@ export default function TextEditor() {
   }, []);
 
   const { snapshot, undo, redo, canUndo, canRedo } = useUndoRedo(editorRef, refreshEditorContent);
+  const tts = useTextToSpeech();
 
   const refreshProviders = useCallback(() => {
     fetch('/api/providers').then((r) => r.json()).then(setAvailableProviders).catch(() => {});
@@ -621,10 +624,10 @@ export default function TextEditor() {
   useEffect(() => {
     const isOpen = !!(rewriteResult || composeResult || composeModalOpen);
     if (!isOpen) return;
-    const handleKey = (e) => { if (e.key === 'Escape') { setRewriteResult(null); setComposeResult(null); if (!isComposing) setComposeModalOpen(false); } };
+    const handleKey = (e) => { if (e.key === 'Escape') { tts.stop(); setRewriteResult(null); setComposeResult(null); if (!isComposing) setComposeModalOpen(false); } };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [rewriteResult, composeResult, composeModalOpen, isComposing]);
+  }, [rewriteResult, composeResult, composeModalOpen, isComposing, tts.stop]);
 
   useEffect(() => {
     try { localStorage.setItem('wa-model', selectedModel); } catch {}
@@ -896,6 +899,7 @@ export default function TextEditor() {
 
   // rewrite / compose 両方の結果モーダルで共用
   const applyResult = useCallback(() => {
+    tts.stop();
     const data = rewriteResult || composeResult;
     if (data && editorRef.current) {
       snapshot(); // Undo用にスナップショット
@@ -905,9 +909,9 @@ export default function TextEditor() {
     }
     setRewriteResult(null);
     setComposeResult(null);
-  }, [rewriteResult, composeResult, refreshEditorContent, snapshot]);
+  }, [rewriteResult, composeResult, refreshEditorContent, snapshot, tts.stop]);
 
-  const closeResult = useCallback(() => { setRewriteResult(null); setComposeResult(null); }, []);
+  const closeResult = useCallback(() => { tts.stop(); setRewriteResult(null); setComposeResult(null); }, [tts.stop]);
 
   const applySuggestion = useCallback((suggestion) => {
     if (!editorRef.current) return;
@@ -1902,6 +1906,7 @@ export default function TextEditor() {
                 {activeKind === 'compose' ? t('composeDialogTitle') : t('rewriteDialogTitle')}
               </h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <TtsSettings tts={tts} />
                 <button onClick={() => setIsModalMaximized((v) => !v)}
                   className="toolbar-btn" title={isModalMaximized ? '元のサイズ' : '最大化'} style={{ width: 28, height: 28 }}>
                   {isModalMaximized ? <Minimize2 style={{ width: 15, height: 15 }} /> : <Maximize2 style={{ width: 15, height: 15 }} />}
@@ -1913,12 +1918,19 @@ export default function TextEditor() {
             </div>
             <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '1fr 1fr', overflow: 'hidden' }}>
               {[
-                { label: activeKind === 'compose' ? t('composeBefore') : t('rewriteBefore'), text: activeResult.original, accent: 'var(--cat-spelling)' },
-                { label: activeKind === 'compose' ? t('composeAfter') : t('rewriteAfter'), text: activeResult.rewritten, accent: activeKind === 'compose' ? 'var(--accent)' : 'var(--cat-ai-writing)' },
-              ].map(({ label, text, accent }, i) => (
+                { id: 'before', label: activeKind === 'compose' ? t('composeBefore') : t('rewriteBefore'), text: activeResult.original, accent: 'var(--cat-spelling)' },
+                { id: 'after', label: activeKind === 'compose' ? t('composeAfter') : t('rewriteAfter'), text: activeResult.rewritten, accent: activeKind === 'compose' ? 'var(--accent)' : 'var(--cat-ai-writing)' },
+              ].map(({ id, label, text, accent }, i) => (
                 <div key={label} style={{ display: 'flex', flexDirection: 'column', borderRight: i === 0 ? '1px solid var(--border-subtle)' : 'none', minHeight: 0 }}>
-                  <div style={{ flexShrink: 0, padding: '9px 20px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-toolbar)' }}>
-                    {label}
+                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '5px 10px 5px 20px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-toolbar)' }}>
+                    <span>{label}</span>
+                    <button onClick={() => tts.toggle(text, id)} className="toolbar-btn"
+                      title={tts.speakingId === id ? t('ttsStop') : t('ttsReadAloud')}
+                      style={{ width: 26, height: 26, color: accent }}>
+                      {tts.speakingId === id
+                        ? (tts.loading ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" /> : <Square style={{ width: 13, height: 13, fill: 'currentColor' }} />)
+                        : <Volume2 style={{ width: 15, height: 15 }} />}
+                    </button>
                   </div>
                   <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 20px', fontSize: 13, lineHeight: 1.75, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', fontFamily: getFontStack(fontFamily) }}>
                     {text}
