@@ -1371,6 +1371,15 @@ export default function TextEditor() {
                         <button key={i} onClick={() => loadSample(s.text)} className="dropdown-item" style={{ fontSize: 12 }}>{s.label}</button>
                       ))}
                     </Dropdown>
+                    {/* 本文の読み上げ / 停止 */}
+                    <button onClick={() => tts.toggle(editorRef.current?.innerText?.trim() || '', 'editor')}
+                      className="toolbar-btn" title={tts.speakingId === 'editor' ? t('ttsStop') : t('ttsReadAloud')}
+                      style={{ width: 28, height: 28, color: tts.speakingId === 'editor' ? 'var(--accent)' : undefined }}>
+                      {tts.speakingId === 'editor'
+                        ? (tts.loading ? <Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" /> : <Square style={{ width: 12, height: 12, fill: 'currentColor' }} />)
+                        : <Volume2 style={{ width: 15, height: 15 }} />}
+                    </button>
+                    <TtsSettings tts={tts} />
                     <button onClick={handleCopy} className="toolbar-btn" title={t('copy')} style={{ width: 28, height: 28 }}>
                       {copied ? <Check style={{ width: 14, height: 14, color: 'var(--accept)' }} /> : <Copy style={{ width: 14, height: 14 }} />}
                     </button>

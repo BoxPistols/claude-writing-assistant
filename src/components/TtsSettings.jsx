@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Volume2 } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 import { t } from '../locales';
 
 // 結果モーダル内の音声設定ポップオーバー（エンジン / 音声・話者 / 速度 / VOICEVOXエンドポイント）
@@ -38,7 +38,7 @@ export default function TtsSettings({ tts }) {
     <div ref={ref} style={{ position: 'relative' }}>
       <button className="toolbar-btn" title={t('ttsSettings')} style={{ width: 28, height: 28 }}
         onClick={() => setOpen((o) => !o)}>
-        <Volume2 style={{ width: 16, height: 16 }} />
+        <SlidersHorizontal style={{ width: 15, height: 15 }} />
       </button>
       {open && (
         <div style={{
