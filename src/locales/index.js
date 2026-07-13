@@ -138,6 +138,10 @@ export const TRANSLATIONS = {
     ttsIntonation: 'Intonation',
     ttsVolume: 'Volume',
     ttsPreview: 'Preview',
+    collapseControls: 'Hide control panel',
+    expandControls: 'Show control panel',
+    collapseSuggestions: 'Hide suggestions panel',
+    expandSuggestions: 'Show suggestions panel',
     composeBackgroundTemplates: [
       { label: 'To manager', text: 'Addressed to your direct manager or department head; stay respectful and keep it concise as a report or consultation.' },
       { label: 'To client', text: 'Addressed to an external customer or business partner; use polite, considerate language that preserves trust.' },
@@ -299,6 +303,10 @@ export const TRANSLATIONS = {
     ttsIntonation: '抑揚',
     ttsVolume: '音量',
     ttsPreview: '試聴',
+    collapseControls: '操作パネルを隠す',
+    expandControls: '操作パネルを表示',
+    collapseSuggestions: '改善提案パネルを隠す',
+    expandSuggestions: '改善提案パネルを表示',
     composeBackgroundTemplates: [
       { label: '上司へ', text: '直属の上司や部門長に宛てた文章で、敬意を保ちつつ報告・相談として簡潔に伝える関係。' },
       { label: '取引先へ', text: '社外の顧客や取引先に宛てた文章で、丁寧な敬語と配慮で信頼を損なわない関係。' },

@@ -4,7 +4,7 @@ import {
   Bold, Italic, Underline, Link, AlignLeft, AlignCenter,
   AlignRight, List, ListOrdered, Outdent, Indent,
   Type, Highlighter, MoveVertical, MoveHorizontal, RotateCcw, Feather, ChevronDown, Settings, Key, Eye, EyeOff, Wand2, Maximize2, Minimize2,
-  Undo2, Redo2, Volume2, Square,
+  Undo2, Redo2, Volume2, Square, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
 } from 'lucide-react';
 import { t, locale } from '../locales';
 import { AVAILABLE_MODELS, DEFAULT_MODEL_ID, PROVIDERS, getModel, autoSelectModel } from '../config/models';
@@ -543,6 +543,21 @@ export default function TextEditor() {
   });
   // 文脈整形はモーダルで開く（メインの編集エリアを圧迫しないため）
   const [composeModalOpen, setComposeModalOpen] = useState(false);
+  // 左（操作パネル）/ 右（改善提案）サイドバーの開閉。モバイル幅は初期状態を閉じておく
+  const [leftOpen, setLeftOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem('wa-left-open');
+      if (saved != null) return saved === '1';
+    } catch {}
+    return typeof window === 'undefined' || window.innerWidth > 768;
+  });
+  const [rightOpen, setRightOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem('wa-right-open');
+      if (saved != null) return saved === '1';
+    } catch {}
+    return typeof window === 'undefined' || window.innerWidth > 768;
+  });
   const [suggestions, setSuggestions] = useState([]);
   const [activeCategory, setActiveCategory] = useState('all');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -647,6 +662,8 @@ export default function TextEditor() {
 
   useEffect(() => { try { localStorage.setItem('wa-compose-bg', background); } catch {} }, [background]);
   useEffect(() => { try { localStorage.setItem('wa-compose-purpose', purpose); } catch {} }, [purpose]);
+  useEffect(() => { try { localStorage.setItem('wa-left-open', leftOpen ? '1' : '0'); } catch {} }, [leftOpen]);
+  useEffect(() => { try { localStorage.setItem('wa-right-open', rightOpen ? '1' : '0'); } catch {} }, [rightOpen]);
 
   useEffect(() => {
     if (!editorRef.current) return;
@@ -786,6 +803,7 @@ export default function TextEditor() {
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           setSuggestions(parsed.map((s, i) => ({ ...s, id: i, status: 'pending', type: s.type?.replace(/_/g, '-') })));
+          setRightOpen(true); // 提案が届いたら改善提案パネルを自動的に開く
         } else {
           console.warn('No JSON array found in response:', content);
           alert(t('failedToParse'));
@@ -875,6 +893,7 @@ export default function TextEditor() {
             if (jsonMatch) {
               const parsed = JSON.parse(jsonMatch[0]);
               setSuggestions(parsed.map((s, i) => ({ ...s, id: i, status: 'pending', type: s.type?.replace(/_/g, '-') })));
+              setRightOpen(true); // 提案が届いたら改善提案パネルを自動的に開く
             } else console.warn('[runAll] analyze: no JSON array found in response');
           } catch (e) { console.error('[parse]', e, content); }
         })
@@ -1069,6 +1088,10 @@ export default function TextEditor() {
       {/* ─── Header ─────────────────────────────── */}
       <header className="app-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          {/* 左（操作パネル）トグル */}
+          <TBtn onClick={() => setLeftOpen((v) => !v)} title={leftOpen ? t('collapseControls') : t('expandControls')}>
+            {leftOpen ? <PanelLeftClose style={{ width: 17, height: 17 }} /> : <PanelLeftOpen style={{ width: 17, height: 17 }} />}
+          </TBtn>
           <Feather style={{ width: 20, height: 20, color: 'var(--accent)', flexShrink: 0 }} />
           <h1 className="app-title">
             <span className="title-full">{t('appTitle')}</span>
@@ -1244,10 +1267,154 @@ export default function TextEditor() {
           <TBtn onClick={() => setDarkMode(!darkMode)} title={darkMode ? 'Light mode' : 'Dark mode'}>
             {darkMode ? <Sun style={{ width: 17, height: 17 }} /> : <Moon style={{ width: 17, height: 17 }} />}
           </TBtn>
+
+          {/* 右（改善提案）トグル。閉じている間に新しい提案が届くとバッジで知らせる */}
+          <div style={{ position: 'relative' }}>
+            <TBtn onClick={() => setRightOpen((v) => !v)} title={rightOpen ? t('collapseSuggestions') : t('expandSuggestions')}>
+              {rightOpen ? <PanelRightClose style={{ width: 17, height: 17 }} /> : <PanelRightOpen style={{ width: 17, height: 17 }} />}
+            </TBtn>
+            {!rightOpen && suggestions.length > 0 && (
+              <span style={{
+                position: 'absolute', top: 2, right: 2, width: 8, height: 8, borderRadius: '50%',
+                background: 'var(--cat-spelling)', border: '1.5px solid var(--bg-surface)',
+              }} />
+            )}
+          </div>
         </div>
       </header>
 
       <div className="main-layout">
+
+        {/* ─── Control Sidebar（左）: 文脈整形・追加指示・実行ボタン群 ─── */}
+        <div className={`control-sidebar${leftOpen ? '' : ' collapsed'}`}>
+          {/* Compose（文脈整形）: メインエリアを圧迫しない1行トリガー。クリックでモーダルを開く */}
+          <div style={{ padding: '14px 24px 0' }}>
+            <div className="compose-card">
+              <button
+                onClick={() => setComposeModalOpen(true)}
+                aria-haspopup="dialog"
+                title={t('composeModeDesc')}
+                className="compose-toggle">
+                <span className="compose-icon">
+                  <Feather style={{ width: 19, height: 19 }} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{t('composeMode')}</span>
+                    <span className="compose-badge">{t('composeBadge')}</span>
+                  </span>
+                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('composeModeDesc')}</span>
+                </span>
+                <span className="compose-chevron" aria-hidden="true">
+                  <ChevronDown style={{ width: 18, height: 18, transform: 'rotate(-90deg)' }} />
+                </span>
+              </button>
+            </div>
+          </div>
+
+          {/* Custom Instruction */}
+          <div style={{ padding: '14px 24px 0', borderTop: '1px solid var(--border-primary)' }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
+              {t('customInstruction')}
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+              {(t('instructionTemplates') || []).map((tmpl) => (
+                <button key={tmpl.label}
+                  onClick={() => setCustomInstruction(customInstruction === tmpl.text ? '' : tmpl.text)}
+                  style={{
+                    padding: '3px 10px', fontSize: 11, fontWeight: 500,
+                    border: '1px solid var(--border-primary)', borderRadius: 20,
+                    background: customInstruction === tmpl.text ? 'var(--accent)' : 'var(--bg-secondary)',
+                    color: customInstruction === tmpl.text ? '#fff' : 'var(--text-secondary)',
+                    cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                  }}>
+                  {tmpl.label}
+                </button>
+              ))}
+            </div>
+            <textarea
+              value={customInstruction}
+              onChange={(e) => setCustomInstruction(e.target.value)}
+              placeholder={t('customInstructionPlaceholder')}
+              rows={3}
+              style={{
+                width: '100%', padding: '8px 12px', fontSize: 13,
+                border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)',
+                background: 'var(--bg-primary)', color: 'var(--text-primary)',
+                outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+                lineHeight: 1.5, fontFamily: 'inherit', transition: 'border-color 0.15s',
+              }}
+              onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
+              onBlur={(e) => (e.target.style.borderColor = 'var(--border-primary)')}
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ padding: '12px 24px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {/* 分析 & AI文体修正（トータル） */}
+            <button onClick={handleRunAll} disabled={isAnalyzing || isRewriting}
+              className={(isAnalyzing || isRewriting) ? 'animate-shimmer' : 'animate-pulse-accent'}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, whiteSpace: 'nowrap',
+                padding: '12px 14px', fontSize: 13, fontWeight: 600, letterSpacing: '0.01em',
+                color: '#fff', background: (isAnalyzing || isRewriting) ? undefined : 'var(--accent)',
+                border: 'none', borderRadius: 'var(--radius)', cursor: (isAnalyzing || isRewriting) ? 'wait' : 'pointer', transition: 'background 0.2s, transform 0.1s' }}
+              onMouseEnter={(e) => { if (!isAnalyzing && !isRewriting) e.currentTarget.style.background = 'var(--accent-hover)'; }}
+              onMouseLeave={(e) => { if (!isAnalyzing && !isRewriting) e.currentTarget.style.background = 'var(--accent)'; }}
+              onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.99)'; }}
+              onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}>
+              {(isAnalyzing || isRewriting)
+                ? (<><Loader2 style={{ width: 15, height: 15, flexShrink: 0 }} className="animate-spin-slow" />
+                    {isAnalyzing && isRewriting ? `${t('analyzing')} & ${t('rewriting')}` : isAnalyzing ? t('analyzing') : t('rewriting')}
+                    <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginLeft: 2 }}>
+                      {Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%
+                    </span></>)
+                : (<><Sparkles style={{ width: 14, height: 14, flexShrink: 0 }} /><Wand2 style={{ width: 14, height: 14, flexShrink: 0 }} />{t('runAll')}
+                    <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 2 }}>{formatShortcut(shortcuts.runAll.parts)}</span></>)}
+            </button>
+            {/* プログレスバー */}
+            {(isAnalyzing || isRewriting) && estimatedSecs > 0 && (
+              <div style={{ height: 3, borderRadius: 2, background: 'var(--border-subtle)', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', borderRadius: 2,
+                  background: 'var(--accent)',
+                  width: `${Math.min(95, (elapsedSecs / estimatedSecs) * 100)}%`,
+                  transition: 'width 1s linear',
+                }} />
+              </div>
+            )}
+            {/* 分析のみ / AI文体修正のみ */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={handleAnalyze} disabled={isAnalyzing}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '9px 12px', fontSize: 12, fontWeight: 600,
+                  color: 'var(--accent)', background: 'transparent',
+                  border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)',
+                  cursor: isAnalyzing ? 'wait' : 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={(e) => { if (!isAnalyzing) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-soft)'; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
+                {isAnalyzing
+                  ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('analyzing')}
+                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
+                  : (<><Sparkles style={{ width: 14, height: 14 }} />{t('analyzeText')}
+                      <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.analyze.parts)}</span></>)}
+              </button>
+              <button onClick={handleRewrite} disabled={isRewriting}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  padding: '9px 12px', fontSize: 12, fontWeight: 600,
+                  color: 'var(--cat-ai-writing)', background: 'transparent',
+                  border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)',
+                  cursor: isRewriting ? 'wait' : 'pointer', transition: 'all 0.15s' }}
+                onMouseEnter={(e) => { if (!isRewriting) { e.currentTarget.style.borderColor = 'var(--cat-ai-writing)'; e.currentTarget.style.background = 'var(--cat-ai-writing-bg)'; } }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
+                {isRewriting
+                  ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('rewriting')}
+                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
+                  : (<><Wand2 style={{ width: 14, height: 14 }} />{t('rewriteAI')}
+                      <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.rewrite.parts)}</span></>)}
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* ─── Editor Panel ──────────────────────── */}
         <div className="editor-panel">
@@ -1395,137 +1562,32 @@ export default function TextEditor() {
 
           </div>
 
-          {/* Compose（文脈整形）: メインエリアを圧迫しない1行トリガー。クリックでモーダルを開く */}
-          <div style={{ padding: '14px 24px 0' }}>
-            <div className="compose-card">
-              <button
-                onClick={() => setComposeModalOpen(true)}
-                aria-haspopup="dialog"
-                title={t('composeModeDesc')}
-                className="compose-toggle">
-                <span className="compose-icon">
-                  <Feather style={{ width: 19, height: 19 }} />
-                </span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{t('composeMode')}</span>
-                    <span className="compose-badge">{t('composeBadge')}</span>
-                  </span>
-                  <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('composeModeDesc')}</span>
-                </span>
-                <span className="compose-chevron" aria-hidden="true">
-                  <ChevronDown style={{ width: 18, height: 18, transform: 'rotate(-90deg)' }} />
-                </span>
+          {/* 左サイドバーが閉じている時のためのコンパクト実行ボタン（実行手段を常時確保） */}
+          {!leftOpen && (
+            <div style={{ padding: '0 24px 16px', flexShrink: 0 }}>
+              <button onClick={handleRunAll} disabled={isAnalyzing || isRewriting}
+                className={(isAnalyzing || isRewriting) ? 'animate-shimmer' : 'animate-pulse-accent'}
+                style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  padding: '10px 20px', fontSize: 13, fontWeight: 600, letterSpacing: '0.01em',
+                  color: '#fff', background: (isAnalyzing || isRewriting) ? undefined : 'var(--accent)',
+                  border: 'none', borderRadius: 'var(--radius)', cursor: (isAnalyzing || isRewriting) ? 'wait' : 'pointer', transition: 'background 0.2s' }}
+                onMouseEnter={(e) => { if (!isAnalyzing && !isRewriting) e.currentTarget.style.background = 'var(--accent-hover)'; }}
+                onMouseLeave={(e) => { if (!isAnalyzing && !isRewriting) e.currentTarget.style.background = 'var(--accent)'; }}>
+                {(isAnalyzing || isRewriting)
+                  ? (<><Loader2 style={{ width: 15, height: 15 }} className="animate-spin-slow" />
+                      {isAnalyzing && isRewriting ? `${t('analyzing')} & ${t('rewriting')}` : isAnalyzing ? t('analyzing') : t('rewriting')}
+                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginLeft: 4 }}>
+                        {Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%
+                      </span></>)
+                  : (<><Sparkles style={{ width: 14, height: 14 }} /><Wand2 style={{ width: 14, height: 14 }} />{t('runAll')}
+                      <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 4 }}>{formatShortcut(shortcuts.runAll.parts)}</span></>)}
               </button>
             </div>
-          </div>
-
-          {/* Custom Instruction */}
-          <div style={{ padding: '14px 24px 0', borderTop: '1px solid var(--border-primary)' }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
-              {t('customInstruction')}
-            </label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
-              {(t('instructionTemplates') || []).map((tmpl) => (
-                <button key={tmpl.label}
-                  onClick={() => setCustomInstruction(customInstruction === tmpl.text ? '' : tmpl.text)}
-                  style={{
-                    padding: '3px 10px', fontSize: 11, fontWeight: 500,
-                    border: '1px solid var(--border-primary)', borderRadius: 20,
-                    background: customInstruction === tmpl.text ? 'var(--accent)' : 'var(--bg-secondary)',
-                    color: customInstruction === tmpl.text ? '#fff' : 'var(--text-secondary)',
-                    cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
-                  }}>
-                  {tmpl.label}
-                </button>
-              ))}
-            </div>
-            <textarea
-              value={customInstruction}
-              onChange={(e) => setCustomInstruction(e.target.value)}
-              placeholder={t('customInstructionPlaceholder')}
-              rows={2}
-              style={{
-                width: '100%', padding: '8px 12px', fontSize: 13,
-                border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)',
-                background: 'var(--bg-primary)', color: 'var(--text-primary)',
-                outline: 'none', resize: 'vertical', boxSizing: 'border-box',
-                lineHeight: 1.5, fontFamily: 'inherit', transition: 'border-color 0.15s',
-              }}
-              onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')}
-              onBlur={(e) => (e.target.style.borderColor = 'var(--border-primary)')}
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div style={{ padding: '12px 24px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {/* 分析 & AI文体修正（トータル） */}
-            <button onClick={handleRunAll} disabled={isAnalyzing || isRewriting}
-              className={(isAnalyzing || isRewriting) ? 'animate-shimmer' : 'animate-pulse-accent'}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                padding: '12px 20px', fontSize: 14, fontWeight: 600, letterSpacing: '0.01em',
-                color: '#fff', background: (isAnalyzing || isRewriting) ? undefined : 'var(--accent)',
-                border: 'none', borderRadius: 'var(--radius)', cursor: (isAnalyzing || isRewriting) ? 'wait' : 'pointer', transition: 'background 0.2s, transform 0.1s' }}
-              onMouseEnter={(e) => { if (!isAnalyzing && !isRewriting) e.currentTarget.style.background = 'var(--accent-hover)'; }}
-              onMouseLeave={(e) => { if (!isAnalyzing && !isRewriting) e.currentTarget.style.background = 'var(--accent)'; }}
-              onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.99)'; }}
-              onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}>
-              {(isAnalyzing || isRewriting)
-                ? (<><Loader2 style={{ width: 16, height: 16 }} className="animate-spin-slow" />
-                    {isAnalyzing && isRewriting ? `${t('analyzing')} & ${t('rewriting')}` : isAnalyzing ? t('analyzing') : t('rewriting')}
-                    <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginLeft: 4 }}>
-                      {Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%
-                    </span></>)
-                : (<><Sparkles style={{ width: 15, height: 15 }} /><Wand2 style={{ width: 15, height: 15 }} />{t('runAll')}
-                    <span style={{ fontSize: 11, opacity: 0.7, marginLeft: 4 }}>{formatShortcut(shortcuts.runAll.parts)}</span></>)}
-            </button>
-            {/* プログレスバー */}
-            {(isAnalyzing || isRewriting) && estimatedSecs > 0 && (
-              <div style={{ height: 3, borderRadius: 2, background: 'var(--border-subtle)', overflow: 'hidden' }}>
-                <div style={{
-                  height: '100%', borderRadius: 2,
-                  background: 'var(--accent)',
-                  width: `${Math.min(95, (elapsedSecs / estimatedSecs) * 100)}%`,
-                  transition: 'width 1s linear',
-                }} />
-              </div>
-            )}
-            {/* 分析のみ / AI文体修正のみ */}
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button onClick={handleAnalyze} disabled={isAnalyzing}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '9px 12px', fontSize: 12, fontWeight: 600,
-                  color: 'var(--accent)', background: 'transparent',
-                  border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)',
-                  cursor: isAnalyzing ? 'wait' : 'pointer', transition: 'all 0.15s' }}
-                onMouseEnter={(e) => { if (!isAnalyzing) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.background = 'var(--accent-soft)'; } }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
-                {isAnalyzing
-                  ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('analyzing')}
-                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
-                  : (<><Sparkles style={{ width: 14, height: 14 }} />{t('analyzeText')}
-                      <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.analyze.parts)}</span></>)}
-              </button>
-              <button onClick={handleRewrite} disabled={isRewriting}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  padding: '9px 12px', fontSize: 12, fontWeight: 600,
-                  color: 'var(--cat-ai-writing)', background: 'transparent',
-                  border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)',
-                  cursor: isRewriting ? 'wait' : 'pointer', transition: 'all 0.15s' }}
-                onMouseEnter={(e) => { if (!isRewriting) { e.currentTarget.style.borderColor = 'var(--cat-ai-writing)'; e.currentTarget.style.background = 'var(--cat-ai-writing-bg)'; } }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
-                {isRewriting
-                  ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('rewriting')}
-                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
-                  : (<><Wand2 style={{ width: 14, height: 14 }} />{t('rewriteAI')}
-                      <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.rewrite.parts)}</span></>)}
-              </button>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* ─── Suggestions Panel ─────────────────── */}
-        <div className="suggestions-panel">
+        <div className={`suggestions-panel${rightOpen ? '' : ' collapsed'}`}>
           <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border-primary)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
               <h2 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>
