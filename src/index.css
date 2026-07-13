@@ -517,6 +517,26 @@ body {
   height: calc(100vh - 56px);
 }
 
+/* 左: 操作パネル（文脈整形・追加指示・実行ボタン群） */
+.control-sidebar {
+  width: 336px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  overflow-y: auto;
+  transition: width 0.2s ease, opacity 0.15s ease, padding 0.2s ease;
+}
+
+.control-sidebar.collapsed {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  border-right: none;
+  pointer-events: none;
+}
+
 .editor-panel {
   flex: 1;
   display: flex;
@@ -531,6 +551,14 @@ body {
   flex-direction: column;
   background: var(--bg-secondary);
   flex-shrink: 0;
+  transition: width 0.2s ease, opacity 0.15s ease;
+}
+
+.suggestions-panel.collapsed {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
 /* ─── Mobile / Tablet Responsive ──────── */
@@ -553,6 +581,18 @@ body {
     min-height: calc(100vh - 48px);
   }
 
+  .control-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border-primary);
+    max-height: 60vh;
+  }
+
+  .control-sidebar.collapsed {
+    max-height: 0;
+    border-bottom: none;
+  }
+
   .editor-panel {
     border-right: none;
     border-bottom: 1px solid var(--border-primary);
@@ -562,6 +602,10 @@ body {
   .suggestions-panel {
     width: 100%;
     min-height: 40vh;
+  }
+
+  .suggestions-panel.collapsed {
+    min-height: 0;
   }
 
   .modal-panel {
