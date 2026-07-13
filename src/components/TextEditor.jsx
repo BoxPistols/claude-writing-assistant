@@ -1880,7 +1880,7 @@ export default function TextEditor() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
                 <span className="compose-icon" style={{ width: 42, height: 42 }}><Feather style={{ width: 21, height: 21 }} /></span>
                 <div style={{ minWidth: 0 }}>
-                  <h3 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 25, fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.15 }}>{t('composeMode')}</h3>
+                  <h3 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 25, fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('composeMode')}</h3>
                   <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('composeModeDesc')}</p>
                 </div>
               </div>
@@ -1940,17 +1940,17 @@ export default function TextEditor() {
                 </div>
               )}
             </div>
-            {/* Footer */}
-            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '18px 28px', borderTop: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: 13, color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>{charCount.toLocaleString()} {t('characters')}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Footer: 狭い画面では「文字数」と「ボタン群」の2ブロック単位で折り返す（ボタン同士はバラバラに折り返さない） */}
+            <div style={{ flexShrink: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: '8px 10px', padding: '18px 28px', borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ flexShrink: 0, fontSize: 13, color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums', marginRight: 'auto' }}>{charCount.toLocaleString()} {t('characters')}</span>
+              <div style={{ flexShrink: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
                 <button onClick={() => setComposeModalOpen(false)} disabled={isComposing}
-                  style={{ padding: '10px 18px', fontSize: 14, fontWeight: 500, borderRadius: 'var(--radius)', border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-secondary)', cursor: isComposing ? 'default' : 'pointer' }}>
+                  style={{ padding: '10px 18px', fontSize: 14, fontWeight: 500, borderRadius: 'var(--radius)', border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-secondary)', cursor: isComposing ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
                   {t('cancel')}
                 </button>
                 <button onClick={handleCompose} disabled={isComposing}
                   className={isComposing ? 'animate-shimmer' : ''}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minWidth: 190, padding: '10px 22px', fontSize: 14, fontWeight: 600, color: '#fff', background: isComposing ? undefined : 'var(--accent)', border: 'none', borderRadius: 'var(--radius)', cursor: isComposing ? 'wait' : 'pointer', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 22px', fontSize: 14, fontWeight: 600, color: '#fff', background: isComposing ? undefined : 'var(--accent)', border: 'none', borderRadius: 'var(--radius)', cursor: isComposing ? 'wait' : 'pointer', transition: 'background 0.2s', whiteSpace: 'nowrap' }}
                   onMouseEnter={(e) => { if (!isComposing) e.currentTarget.style.background = 'var(--accent-hover)'; }}
                   onMouseLeave={(e) => { if (!isComposing) e.currentTarget.style.background = 'var(--accent)'; }}>
                   {isComposing
