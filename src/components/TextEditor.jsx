@@ -1870,18 +1870,18 @@ export default function TextEditor() {
             style={{
               background: 'var(--bg-surface)', border: '1px solid var(--border-primary)',
               boxShadow: 'var(--shadow-lg)', borderRadius: 'var(--radius-lg)',
-              width: 560, maxWidth: 'calc(100vw - 24px)', maxHeight: '88vh',
+              width: 'min(760px, calc(100vw - 48px))', maxHeight: '88vh',
               display: 'flex', flexDirection: 'column', overflow: 'hidden',
               animation: 'fadeInUp 0.25s ease-out',
             }}
             onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '18px 22px', borderBottom: '1px solid var(--border-subtle)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                <span className="compose-icon" style={{ width: 34, height: 34 }}><Feather style={{ width: 17, height: 17 }} /></span>
+            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '22px 28px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+                <span className="compose-icon" style={{ width: 42, height: 42 }}><Feather style={{ width: 21, height: 21 }} /></span>
                 <div style={{ minWidth: 0 }}>
-                  <h3 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 21, fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.15 }}>{t('composeMode')}</h3>
-                  <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '1px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('composeModeDesc')}</p>
+                  <h3 style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 25, fontWeight: 600, color: 'var(--text-primary)', margin: 0, lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('composeMode')}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '2px 0 0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t('composeModeDesc')}</p>
                 </div>
               </div>
               <button onClick={() => setComposeModalOpen(false)} className="toolbar-btn" style={{ width: 28, height: 28, flexShrink: 0 }}>
@@ -1889,16 +1889,16 @@ export default function TextEditor() {
               </button>
             </div>
             {/* Body (scroll) */}
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '22px 28px', display: 'flex', flexDirection: 'column', gap: 22 }}>
               {/* 背景・状況 */}
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 8 }}>{t('composeBackground')}</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 10 }}>{t('composeBackground')}</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                   {(t('composeBackgroundTemplates') || []).map((tmpl) => (
                     <button key={tmpl.label}
                       onClick={() => setBackground(background === tmpl.text ? '' : tmpl.text)}
                       style={{
-                        padding: '4px 11px', fontSize: 12, fontWeight: 500,
+                        padding: '5px 13px', fontSize: 13, fontWeight: 500,
                         border: '1px solid var(--border-primary)', borderRadius: 20,
                         background: background === tmpl.text ? 'var(--accent)' : 'var(--bg-secondary)',
                         color: background === tmpl.text ? '#fff' : 'var(--text-secondary)',
@@ -1908,19 +1908,19 @@ export default function TextEditor() {
                     </button>
                   ))}
                 </div>
-                <textarea value={background} onChange={(e) => setBackground(e.target.value)} placeholder={t('composeBackgroundPlaceholder')} rows={3}
-                  style={{ width: '100%', padding: '9px 12px', fontSize: 13, border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5, fontFamily: 'inherit', transition: 'border-color 0.15s' }}
+                <textarea value={background} onChange={(e) => setBackground(e.target.value)} placeholder={t('composeBackgroundPlaceholder')} rows={4}
+                  style={{ width: '100%', padding: '12px 14px', fontSize: 14, border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.6, fontFamily: 'inherit', transition: 'border-color 0.15s' }}
                   onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')} onBlur={(e) => (e.target.style.borderColor = 'var(--border-primary)')} />
               </div>
               {/* 目的・ゴール */}
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 8 }}>{t('composePurpose')}</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 10 }}>{t('composePurpose')}</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
                   {(t('composePurposeTemplates') || []).map((tmpl) => (
                     <button key={tmpl.label}
                       onClick={() => setPurpose(purpose === tmpl.text ? '' : tmpl.text)}
                       style={{
-                        padding: '4px 11px', fontSize: 12, fontWeight: 500,
+                        padding: '5px 13px', fontSize: 13, fontWeight: 500,
                         border: '1px solid var(--border-primary)', borderRadius: 20,
                         background: purpose === tmpl.text ? 'var(--accent)' : 'var(--bg-secondary)',
                         color: purpose === tmpl.text ? '#fff' : 'var(--text-secondary)',
@@ -1930,8 +1930,8 @@ export default function TextEditor() {
                     </button>
                   ))}
                 </div>
-                <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder={t('composePurposePlaceholder')} rows={3}
-                  style={{ width: '100%', padding: '9px 12px', fontSize: 13, border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5, fontFamily: 'inherit', transition: 'border-color 0.15s' }}
+                <textarea value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder={t('composePurposePlaceholder')} rows={4}
+                  style={{ width: '100%', padding: '12px 14px', fontSize: 14, border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)', background: 'var(--bg-primary)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.6, fontFamily: 'inherit', transition: 'border-color 0.15s' }}
                   onFocus={(e) => (e.target.style.borderColor = 'var(--accent)')} onBlur={(e) => (e.target.style.borderColor = 'var(--border-primary)')} />
               </div>
               {isComposing && estimatedSecs > 0 && (
@@ -1940,23 +1940,23 @@ export default function TextEditor() {
                 </div>
               )}
             </div>
-            {/* Footer */}
-            <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '14px 22px', borderTop: '1px solid var(--border-subtle)' }}>
-              <span style={{ fontSize: 12, color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>{charCount.toLocaleString()} {t('characters')}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Footer: 狭い画面では「文字数」と「ボタン群」の2ブロック単位で折り返す（ボタン同士はバラバラに折り返さない） */}
+            <div style={{ flexShrink: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: '8px 10px', padding: '18px 28px', borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ flexShrink: 0, fontSize: 13, color: 'var(--text-faint)', fontVariantNumeric: 'tabular-nums', marginRight: 'auto' }}>{charCount.toLocaleString()} {t('characters')}</span>
+              <div style={{ flexShrink: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
                 <button onClick={() => setComposeModalOpen(false)} disabled={isComposing}
-                  style={{ padding: '8px 16px', fontSize: 13, fontWeight: 500, borderRadius: 'var(--radius)', border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-secondary)', cursor: isComposing ? 'default' : 'pointer' }}>
+                  style={{ padding: '10px 18px', fontSize: 14, fontWeight: 500, borderRadius: 'var(--radius)', border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-secondary)', cursor: isComposing ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
                   {t('cancel')}
                 </button>
                 <button onClick={handleCompose} disabled={isComposing}
                   className={isComposing ? 'animate-shimmer' : ''}
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minWidth: 180, padding: '9px 20px', fontSize: 13, fontWeight: 600, color: '#fff', background: isComposing ? undefined : 'var(--accent)', border: 'none', borderRadius: 'var(--radius)', cursor: isComposing ? 'wait' : 'pointer', transition: 'background 0.2s' }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 22px', fontSize: 14, fontWeight: 600, color: '#fff', background: isComposing ? undefined : 'var(--accent)', border: 'none', borderRadius: 'var(--radius)', cursor: isComposing ? 'wait' : 'pointer', transition: 'background 0.2s', whiteSpace: 'nowrap' }}
                   onMouseEnter={(e) => { if (!isComposing) e.currentTarget.style.background = 'var(--accent-hover)'; }}
                   onMouseLeave={(e) => { if (!isComposing) e.currentTarget.style.background = 'var(--accent)'; }}>
                   {isComposing
-                    ? (<><Loader2 style={{ width: 15, height: 15 }} className="animate-spin-slow" />{t('composing')}
-                        <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
-                    : (<><Feather style={{ width: 15, height: 15 }} />{t('composeButton')}</>)}
+                    ? (<><Loader2 style={{ width: 16, height: 16 }} className="animate-spin-slow" />{t('composing')}
+                        <span style={{ fontSize: 13, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
+                    : (<><Feather style={{ width: 16, height: 16 }} />{t('composeButton')}</>)}
                 </button>
               </div>
             </div>
