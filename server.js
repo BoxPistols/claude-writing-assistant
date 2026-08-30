@@ -1,4 +1,7 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+// .env.localを先に読む。dotenvは先勝ちなので、ローカルの上書きが.envより優先される。
+// Viteと同じ規約に揃えており、どちらも.gitignoreに入っている。
+dotenv.config({ path: ['.env.local', '.env'] });
 import express from 'express';
 import crypto from 'crypto';
 import cors from 'cors';
