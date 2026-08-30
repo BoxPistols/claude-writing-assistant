@@ -1102,7 +1102,7 @@ export default function TextEditor() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* 残り利用回数（デフォルトキー使用時のみ） */}
           {!hasUserKeys() && (
-            <span style={{ fontSize: 11, color: remaining <= 10 ? 'var(--cat-grammar)' : 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: 12, color: remaining <= 10 ? 'var(--cat-grammar)' : 'var(--text-faint)', fontVariantNumeric: 'tabular-nums' }}>
               {remaining}/{RATE_LIMIT}
             </span>
           )}
@@ -1127,7 +1127,7 @@ export default function TextEditor() {
               >
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: isAutoMode ? 'var(--accent)' : (isProviderAvailable(currentModel.provider) ? 'var(--accept)' : 'var(--cat-spelling)'), flexShrink: 0 }} />
                 <span style={{ fontWeight: 600 }}>{isAutoMode ? t('autoMode') : currentModel.name}</span>
-                {isAutoMode && <span style={{ fontSize: 10, opacity: 0.6, fontWeight: 400 }}>
+                {isAutoMode && <span style={{ fontSize: 12, opacity: 0.6, fontWeight: 400 }}>
                   {getModel(autoSelectModel(charCount, isProviderAvailable))?.name || ''}
                 </span>}
                 <ChevronDown style={{ width: 12, height: 12, opacity: 0.4 }} />
@@ -1152,7 +1152,7 @@ export default function TextEditor() {
                 <Sparkles style={{ width: 14, height: 14, color: 'var(--accent)' }} />
                 <div>
                   <div>{t('autoMode')}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 1 }}>{t('autoModeDesc')}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-faint)', marginTop: 1 }}>{t('autoModeDesc')}</div>
                 </div>
               </button>
               <div style={{ borderBottom: '1px solid var(--border-subtle)', margin: '4px 0' }} />
@@ -1314,7 +1314,7 @@ export default function TextEditor() {
 
           {/* Custom Instruction */}
           <div style={{ padding: '14px 24px 0', borderTop: '1px solid var(--border-primary)' }}>
-            <label style={{ display: 'block', fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
               {t('customInstruction')}
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
@@ -1322,7 +1322,7 @@ export default function TextEditor() {
                 <button key={tmpl.label}
                   onClick={() => setCustomInstruction(customInstruction === tmpl.text ? '' : tmpl.text)}
                   style={{
-                    padding: '3px 10px', fontSize: 11, fontWeight: 500,
+                    padding: '3px 10px', fontSize: 12, fontWeight: 500,
                     border: '1px solid var(--border-primary)', borderRadius: 20,
                     background: customInstruction === tmpl.text ? 'var(--accent)' : 'var(--bg-secondary)',
                     color: customInstruction === tmpl.text ? '#fff' : 'var(--text-secondary)',
@@ -1365,11 +1365,11 @@ export default function TextEditor() {
               {(isAnalyzing || isRewriting)
                 ? (<><Loader2 style={{ width: 15, height: 15, flexShrink: 0 }} className="animate-spin-slow" />
                     {isAnalyzing && isRewriting ? `${t('analyzing')} & ${t('rewriting')}` : isAnalyzing ? t('analyzing') : t('rewriting')}
-                    <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginLeft: 2 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginLeft: 2 }}>
                       {Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%
                     </span></>)
                 : (<><Sparkles style={{ width: 14, height: 14, flexShrink: 0 }} /><Wand2 style={{ width: 14, height: 14, flexShrink: 0 }} />{t('runAll')}
-                    <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 2 }}>{formatShortcut(shortcuts.runAll.parts)}</span></>)}
+                    <span style={{ fontSize: 12, opacity: 0.7, marginLeft: 2 }}>{formatShortcut(shortcuts.runAll.parts)}</span></>)}
             </button>
             {/* プログレスバー */}
             {(isAnalyzing || isRewriting) && estimatedSecs > 0 && (
@@ -1394,9 +1394,9 @@ export default function TextEditor() {
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
                 {isAnalyzing
                   ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('analyzing')}
-                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
+                      <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
                   : (<><Sparkles style={{ width: 14, height: 14 }} />{t('analyzeText')}
-                      <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.analyze.parts)}</span></>)}
+                      <span style={{ fontSize: 12, opacity: 0.6 }}>{formatShortcut(shortcuts.analyze.parts)}</span></>)}
               </button>
               <button onClick={handleRewrite} disabled={isRewriting}
                 style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -1408,9 +1408,9 @@ export default function TextEditor() {
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-primary)'; e.currentTarget.style.background = 'transparent'; }}>
                 {isRewriting
                   ? (<><Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />{t('rewriting')}
-                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
+                      <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%</span></>)
                   : (<><Wand2 style={{ width: 14, height: 14 }} />{t('rewriteAI')}
-                      <span style={{ fontSize: 10, opacity: 0.6 }}>{formatShortcut(shortcuts.rewrite.parts)}</span></>)}
+                      <span style={{ fontSize: 12, opacity: 0.6 }}>{formatShortcut(shortcuts.rewrite.parts)}</span></>)}
               </button>
             </div>
           </div>
@@ -1576,11 +1576,11 @@ export default function TextEditor() {
                 {(isAnalyzing || isRewriting)
                   ? (<><Loader2 style={{ width: 15, height: 15 }} className="animate-spin-slow" />
                       {isAnalyzing && isRewriting ? `${t('analyzing')} & ${t('rewriting')}` : isAnalyzing ? t('analyzing') : t('rewriting')}
-                      <span style={{ fontSize: 11, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginLeft: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginLeft: 4 }}>
                         {Math.min(99, Math.round((elapsedSecs / Math.max(1, estimatedSecs)) * 100))}%
                       </span></>)
                   : (<><Sparkles style={{ width: 14, height: 14 }} /><Wand2 style={{ width: 14, height: 14 }} />{t('runAll')}
-                      <span style={{ fontSize: 10, opacity: 0.7, marginLeft: 4 }}>{formatShortcut(shortcuts.runAll.parts)}</span></>)}
+                      <span style={{ fontSize: 12, opacity: 0.7, marginLeft: 4 }}>{formatShortcut(shortcuts.runAll.parts)}</span></>)}
               </button>
             </div>
           )}
@@ -1793,7 +1793,7 @@ export default function TextEditor() {
                   </button>
                 </div>
                 {testResults[key] && !testResults[key].loading && !testResults[key].ok && testResults[key].error && (
-                  <p style={{ fontSize: 11, color: 'var(--reject)', marginTop: 4, marginBottom: 0, wordBreak: 'break-all' }}>
+                  <p style={{ fontSize: 12, color: 'var(--reject)', marginTop: 4, marginBottom: 0, wordBreak: 'break-all' }}>
                     {testResults[key].error}
                   </p>
                 )}
@@ -1842,7 +1842,7 @@ export default function TextEditor() {
               </div>
               <button
                 onClick={() => { setShortcuts({ ...DEFAULT_SHORTCUTS }); saveShortcuts(DEFAULT_SHORTCUTS); }}
-                style={{ marginTop: 8, padding: '4px 10px', fontSize: 11, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
+                style={{ marginTop: 8, padding: '4px 10px', fontSize: 12, color: 'var(--text-muted)', background: 'none', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
                 {t('shortcutReset')}
               </button>
             </div>
@@ -2002,7 +2002,7 @@ export default function TextEditor() {
                 { id: 'after', label: activeKind === 'compose' ? t('composeAfter') : t('rewriteAfter'), text: activeResult.rewritten, accent: activeKind === 'compose' ? 'var(--accent)' : 'var(--cat-ai-writing)' },
               ].map(({ id, label, text, accent }, i) => (
                 <div key={label} style={{ display: 'flex', flexDirection: 'column', borderRight: i === 0 ? '1px solid var(--border-subtle)' : 'none', minHeight: 0 }}>
-                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '5px 10px 5px 20px', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-toolbar)' }}>
+                  <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '5px 10px 5px 20px', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: accent, borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-toolbar)' }}>
                     <span>{label}</span>
                     <button onClick={() => tts.toggle(text, id)} className="toolbar-btn"
                       title={tts.speakingId === id ? t('ttsStop') : t('ttsReadAloud')}
