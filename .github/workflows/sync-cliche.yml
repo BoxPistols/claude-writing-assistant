@@ -1,0 +1,111 @@
+# ux-writing-dead-clicheの辞書を定期的に取り込み、差分があればPRを出す。
+# 辞書はsrc/vendor/にコミット済みの複製なので、回さない限り古いまま動き続ける。
+# 差分は人が見てからマージする。辞書の変更が予告なく本番の挙動を変えないため。
+name: 辞書の同期
+
+on:
+  schedule:
+    # 07:00 JST。上流が同じ日に複数版を出すことがあるので日次にする
+    - cron: '0 22 * * *'
+  workflow_dispatch:
+
+# 既定はreadなので、このワークフローだけ書き込みを要求する
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-cliche
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - run: npm ci
+
+      - name: 辞書を取り込む
+        id: sync
+        run: |
+          set -o pipefail
+          npm run sync:cliche 2>&1 | tee /tmp/sync.log
+          {
+            echo 'log<<SYNCLOG'
+            cat /tmp/sync.log
+            echo 'SYNCLOG'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 差分の有無を見る
+        id: diff
+        run: |
+          if git diff --quiet -- src/vendor/; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "辞書に変更なし"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- src/vendor/
+          fi
+
+      # 取り込んだ辞書でアプリが壊れないことを、PRを出す前に確かめる
+      - name: ビルドと検出の確認
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          npm run build
+          node -e "
+          import('./src/utils/deadCliche.js').then(async (m) => {
+            const r = await m.checkText('この文書はチームの羅針盤です。', 'business');
+            if (r.violations.length === 0) throw new Error('既知のクリシェを検出できない。取り込みを中止する。');
+            const g = await m.getWritingGuard();
+            if (!g || g.length < 500) throw new Error('生成用の規律が取得できない。取り込みを中止する。');
+            console.log('検出', r.violations.length, '件 / 規律', g.length, '文字 / 規則', r.scope.activeCount, '件');
+          });
+          "
+
+      - name: PRを出す
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(node -e "import('./src/vendor/dead-cliche-data.js').then(({default:d})=>console.log(d.version))")
+          BRANCH=chore/sync-cliche
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add -- src/vendor/
+          git commit -m "辞書をv${VERSION}に更新する
+
+          npm run sync:clicheの結果。src/vendor/は上流の複製で、手で編集していない。
+
+          $(cat /tmp/sync.log)"
+          git push -f origin "$BRANCH"
+
+          BODY=$(printf '%s\n' \
+            "ux-writing-dead-clicheの辞書をv${VERSION}に更新します。" \
+            "" \
+            "\`npm run sync:cliche\` の出力です。" \
+            "" \
+            '```' \
+            "$(cat /tmp/sync.log)" \
+            '```' \
+            "" \
+            "## 確認済み" \
+            "" \
+            "- \`npm run build\` が通る" \
+            "- 既知のクリシェ(羅針盤)を検出できる" \
+            "- 生成側に渡す規律を取得できる" \
+            "" \
+            "辞書の判定が変わると出力も変わります。マージ前に差分を確認してください。")
+
+          if gh pr view "$BRANCH" --json state --jq .state 2>/dev/null | grep -q OPEN; then
+            gh pr edit "$BRANCH" --title "辞書をv${VERSION}に更新する" --body "$BODY"
+            echo "既存のPRを更新した"
+          else
+            gh pr create --base main --head "$BRANCH" --title "辞書をv${VERSION}に更新する" --body "$BODY"
+          fi
