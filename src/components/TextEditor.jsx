@@ -14,7 +14,7 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import TtsSettings, { TtsSettingsForm } from './TtsSettings';
 import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEvent, matchShortcut, DEFAULT_SHORTCUTS } from '../utils/platform';
 import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT, hasUserKeys } from '../utils/rateLimit';
-import { listTargets, getTarget, targetInstruction, DEFAULT_TARGET_ID } from '../config/outputTargets';
+import { OUTPUT_TARGETS, listTargets, getTarget, targetInstruction, DEFAULT_TARGET_ID } from '../config/outputTargets';
 import { sanitizeForTarget, summarizeRemovals } from '../utils/sanitize';
 import { autoFix, checkText, countBySeverity, diffReport } from '../utils/deadCliche';
 
@@ -22,6 +22,7 @@ import { autoFix, checkText, countBySeverity, diffReport } from '../utils/deadCl
 const fmt = (key, vars) => Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, v), t(key));
 
 const SEV_COLOR = { error: 'var(--cat-grammar)', warn: 'var(--cat-style)', info: 'var(--text-muted)' };
+const SEV_ORDER = { error: 2, warn: 1, info: 0 };
 
 // 検出例をルール単位に畳む。和欧間スペースのように1つのルールが何十件も当たることがあり、
 // 生の一致をそのまま並べると他の指摘が埋もれる。件数の多い順に、読める見出しで出す。
@@ -63,6 +64,45 @@ const clicheSamples = (violations) => {
 };
 
 /**
+ * 検出したクリシェを、なぜ問題か(why)と何を書くべきか(ask)つきで並べる。
+ * 辞書がwhyとaskを必須にしているのは、置換候補だけ示すと別のクリシェに置き換わって終わるため。
+ * 同じルールの重複は畳み、一致語と件数と最初の行番号を添える。
+ */
+function ClicheDetails({ violations }) {
+  const groups = new Map();
+  for (const v of violations) {
+    const g = groups.get(v.ruleId) || { ...v, count: 0, samples: [] };
+    g.count++;
+    const s = (v.matched || '').trim();
+    if (s && !g.samples.includes(s) && g.samples.length < 3) g.samples.push(s);
+    groups.set(v.ruleId, g);
+  }
+  const list = [...groups.values()].sort((a, b) => SEV_ORDER[b.severity] - SEV_ORDER[a.severity] || b.count - a.count);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+      {list.map((g) => (
+        <div key={g.ruleId} style={{ paddingLeft: 8, borderLeft: `2px solid ${SEV_COLOR[g.severity]}` }}>
+          <div style={{ fontSize: 12, lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 700, color: SEV_COLOR[g.severity] }}>
+              {g.samples.join('、') || g.catLabel}
+            </span>
+            <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
+              {g.severity}{g.count > 1 ? ` ${g.count}` : ''}・{g.count > 1 ? `${g.line}行目ほか` : `${g.line}行目`}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-muted)' }}>{g.why}</div>
+          <div style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+            <span style={{ color: SEV_COLOR[g.severity], fontWeight: 600 }}>{t('reportAsk')} </span>
+            {g.ask}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
  * 生成結果に何をしたかを出す。
  * 検査で0件だったことを「問題なし」と読ませないため、検査範囲を常に併記する。
  */
@@ -80,7 +120,7 @@ function ResultReport({ report }) {
 
   return (
     <div style={{
-      flexShrink: 0, maxHeight: 190, overflowY: 'auto',
+      flexShrink: 0, maxHeight: 300, overflowY: 'auto',
       padding: '12px 24px', borderTop: '1px solid var(--border-subtle)',
       background: 'var(--bg-toolbar)', display: 'flex', flexDirection: 'column', gap: 7,
     }}>
@@ -104,12 +144,15 @@ function ResultReport({ report }) {
         ) : (
           <>
             {total > 0 && (
-              <div style={{ marginBottom: 3 }}>
-                {['error', 'warn', 'info'].filter((k) => counts[k] > 0).map((k) => (
-                  <span key={k} style={{ marginRight: 10, color: SEV_COLOR[k], fontWeight: 600 }}>{k} {counts[k]}</span>
-                ))}
-                <span style={{ color: 'var(--text-muted)' }}>{clicheSamples(cliche.violations)}</span>
-              </div>
+              <>
+                <div style={{ marginBottom: 3 }}>
+                  {['error', 'warn', 'info'].filter((k) => counts[k] > 0).map((k) => (
+                    <span key={k} style={{ marginRight: 10, color: SEV_COLOR[k], fontWeight: 600 }}>{k} {counts[k]}</span>
+                  ))}
+                  <span style={{ color: 'var(--text-muted)' }}>{clicheSamples(cliche.violations)}</span>
+                </div>
+                <ClicheDetails violations={cliche.violations} />
+              </>
             )}
             {total === 0 && <div style={{ marginBottom: 3 }}>{t('reportClicheNone')}</div>}
             {cliche?.scope && (
@@ -404,6 +447,75 @@ Content & Style:
   return res.json();
 };
 
+/**
+ * 検出したクリシェを、辞書のaskに沿って直させる。
+ * 制約を規律より前に置くのは、askに「本文の要点を1文で再掲する」のように、
+ * 中身の無い入力では捏造を促すものがあるため。矛盾したら制約を優先させる。
+ */
+const refineViaProxy = async (model, text, clientKeys, violations, targetRules = '') => {
+  const isJa = locale.startsWith('ja');
+  // 同じルールの重複は畳む。同じ指示を何度も並べても効かない。
+  const seen = new Map();
+  for (const v of violations) if (!seen.has(v.ruleId)) seen.set(v.ruleId, v);
+  const items = [...seen.values()].map((v, i) => (isJa
+    ? `${i + 1}. 「${(v.matched || '').trim()}」(${v.line}行目) 問題: ${v.why} 直し方: ${v.ask}`
+    : `${i + 1}. "${(v.matched || '').trim()}" (line ${v.line}) Problem: ${v.why} Fix: ${v.ask}`)).join('\n');
+
+  const head = isJa
+    ? `以下の文章から、指摘されたクリシェを取り除いてください。
+
+【守る制約(規律より優先)】
+- 本文に無い情報を足さない。事実・数値・固有名詞を新しく作らない
+- 行を新設しない。段落の数を増やさない
+- 指摘されていない箇所は変えない
+
+【直し方の優先順】
+1. 同じ意味の平易な語に置き換える。それで文が成り立つならこれが最善
+2. 収まらないときは文の組み立てごと変える。語順・述語・助詞を入れ替える
+3. 本文の文脈から意味を決められないときは、その文を変えずに残す。推測で書き換えない
+
+【書き方】
+- 語を消すだけで済ませない。主語・目的語・述語を欠いた文にしない
+- 比喩は、本文の中でそれが指している事柄に置き換える
+- Markdownの記号(見出しの#、箇条書きの-や数字、表の|、リンクの[]()、強調の記号、コードブロックの\`\`\`)を書き換えない
+- コードブロックとインラインコードの中身は書き直さない`
+    : `Remove the flagged cliches from the text below.
+
+Constraints (these override the guidance):
+- Do not add information absent from the text. Do not invent facts, numbers, or names
+- Do not add lines or paragraphs
+- Do not change anything that was not flagged
+
+Priority order:
+1. Replace with a plain word of the same meaning. If the sentence works, stop there
+2. If that does not fit, restructure the sentence
+3. If the meaning cannot be determined from the text, leave that sentence unchanged. Do not guess
+
+Writing:
+- Do not simply delete words, leaving a sentence without a subject, object, or predicate
+- Replace a metaphor with the thing it refers to in the text
+- Do not alter Markdown syntax, and do not rewrite code block or inline code contents`;
+
+  const outputRule = isJa
+    ? '\n\n【出力形式】\n直した文章だけを出力する。説明・前置き・注意書きは一切出力しない。'
+    : '\n\nOutput: Output ONLY the corrected text. No explanation, preamble, or notes.';
+  const listLabel = isJa ? '\n\n【指摘】\n' : '\n\nFlagged items:\n';
+  const bodyLabel = isJa ? '\n\n---\n対象の文章：\n' : '\n\n---\nText:\n';
+  const prompt = `${head}${targetRules ? `\n\n${targetRules}` : ''}${listLabel}${items}${outputRule}${bodyLabel}${text}`;
+
+  const res = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], clientKeys, maxTokens: 16000 }),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { const err = await res.json(); detail = err.error || ''; } catch {}
+    throw new Error(detail || `API error: ${res.status}`);
+  }
+  return res.json();
+};
+
 /* ─── Compose（文脈整形）用プロンプト本文 ─────────
    下書き・背景・目的セクションは composeViaProxy で末尾に付加する。
    プロンプトはジャッジパネル（構成再設計 / 目的適合 / 忠実性の3案統合）で設計。 */
@@ -667,7 +779,13 @@ export default function TextEditor() {
   // 出力先（PR本文 / issue / コミット / PRレビュー / Slack依頼）。
   // プロンプトの制約・生成後のサニタイズ・辞書プリセットの3つを一括で決める。
   const [outputTargetId, setOutputTargetId] = useState(() => {
-    try { return localStorage.getItem('wa-output-target') || DEFAULT_TARGET_ID; } catch { return DEFAULT_TARGET_ID; }
+    try {
+      const saved = localStorage.getItem('wa-output-target');
+      // 保存値が既知のidでなければ既定に書き戻す。idを変えたときにチップの選択と説明が空になるため。
+      if (saved && OUTPUT_TARGETS.some((tg) => tg.id === saved)) return saved;
+      if (saved) localStorage.setItem('wa-output-target', DEFAULT_TARGET_ID);
+      return DEFAULT_TARGET_ID;
+    } catch { return DEFAULT_TARGET_ID; }
   });
   // 文脈整形（compose）用の背景・目的・パネル開閉状態
   const [background, setBackground] = useState(() => {
@@ -700,6 +818,8 @@ export default function TextEditor() {
   const [rewriteResult, setRewriteResult] = useState(null);
   const [composeResult, setComposeResult] = useState(null);
   const [isComposing, setIsComposing] = useState(false);
+  // 結果モーダルから、検出されたクリシェを辞書のaskに沿って直す
+  const [isRefining, setIsRefining] = useState(false);
   const [isModalMaximized, setIsModalMaximized] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
@@ -1095,6 +1215,35 @@ export default function TextEditor() {
     stopProgress();
     if (pendingRewrite) setRewriteResult(pendingRewrite);
   }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress, activeTarget, isJa, finalizeResult]);
+
+  /**
+   * 結果モーダルの本文に対して、検出されたクリシェを辞書のaskに沿って直す。
+   * 直した結果は再びサニタイズと自動修正と再検査に通す。
+   * 原文との照合は最初の原文に対して行うので、繰り返すほど差分の累積が見える。
+   */
+  const handleRefine = useCallback(async () => {
+    const current = rewriteResult || composeResult;
+    const violations = current?.report?.cliche?.violations;
+    if (!current || !violations?.length) return;
+    if (!checkRateLimit()) return;
+
+    const target = getTarget(current.report.targetId);
+    const modelId = resolveModel(current.rewritten.length);
+    setIsRefining(true);
+    startProgress(modelId, current.rewritten.length);
+    try {
+      const data = await refineViaProxy(modelId, current.rewritten, clientKeys, violations, targetInstruction(target, isJa));
+      recordUsage(); setRemaining(getRemaining());
+      const refined = data.content?.[0]?.text?.trim() || '';
+      if (!refined) { alert(t('failedToRefine')); return; }
+      // 照合は最初の原文に対して行う。書き直しを重ねても、原文からのずれが見える。
+      const next = await finalizeResult(current.original, refined, target);
+      if (rewriteResult) setRewriteResult(next); else setComposeResult(next);
+    } catch (e) {
+      console.error('Refine error:', e);
+      alert(e.message?.includes('401') ? t('failedUnauthorized') : t('failedToRefine'));
+    } finally { setIsRefining(false); stopProgress(); }
+  }, [rewriteResult, composeResult, clientKeys, isJa, resolveModel, startProgress, stopProgress, checkRateLimit, finalizeResult]);
 
   // rewrite / compose 両方の結果モーダルで共用
   const applyResult = useCallback(() => {
@@ -2227,6 +2376,20 @@ export default function TextEditor() {
             </div>
             {activeResult.report && <ResultReport report={activeResult.report} />}
             <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)' }}>
+              {/* 検出が残っているときだけ出す。辞書のaskに沿って直させ、結果を再検査に通す */}
+              {activeResult.report?.cliche?.violations?.length > 0 && (
+                <button onClick={handleRefine} disabled={isRefining}
+                  title={t('refineHint')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, marginRight: 'auto',
+                    padding: '8px 16px', fontSize: 13, fontWeight: 600, borderRadius: 'var(--radius)',
+                    border: `1px solid ${SEV_COLOR.error}`, background: 'transparent', color: SEV_COLOR.error,
+                    cursor: isRefining ? 'default' : 'pointer', opacity: isRefining ? 0.6 : 1,
+                  }}>
+                  {isRefining && <Loader2 style={{ width: 14, height: 14 }} className="animate-spin-slow" />}
+                  {isRefining ? t('refining') : t('refineButton')}
+                </button>
+              )}
               <button onClick={closeResult}
                 style={{ padding: '8px 18px', fontSize: 13, fontWeight: 500, borderRadius: 'var(--radius)', border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
                 {t('cancel')}
