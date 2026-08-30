@@ -1,6 +1,5 @@
 const ENV_KEYS = {
   openai: 'OPENAI_API_KEY',
-  anthropic: 'ANTHROPIC_API_KEY',
   gemini: 'GEMINI_API_KEY',
 };
 
@@ -13,7 +12,6 @@ export function setCorsHeaders(res) {
 
 export function getProvider(modelId) {
   if (modelId?.startsWith('gpt-') || modelId?.startsWith('o1') || modelId?.startsWith('o3') || modelId?.startsWith('o4')) return 'openai';
-  if (modelId?.startsWith('claude-')) return 'anthropic';
   if (modelId?.startsWith('gemini-')) return 'gemini';
   return null;
 }
@@ -21,7 +19,6 @@ export function getProvider(modelId) {
 export function getAvailableProviders() {
   return {
     openai: !!process.env.OPENAI_API_KEY,
-    anthropic: !!process.env.ANTHROPIC_API_KEY,
     gemini: !!process.env.GEMINI_API_KEY,
   };
 }
@@ -64,32 +61,6 @@ async function callOpenAI(model, messages, apiKey, maxTokens) {
       output_tokens: data.usage?.completion_tokens || 0,
     },
   };
-}
-
-async function callAnthropic(model, messages, apiKey, maxTokens) {
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not set');
-
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: maxTokens || 16000,
-      messages,
-    }),
-  });
-
-  if (!response.ok) {
-    const errBody = await response.text();
-    console.error(`[Anthropic] ${response.status} ${response.statusText}:`, errBody);
-    throw { status: response.status, message: `Anthropic error ${response.status}: ${errBody}` };
-  }
-
-  return response.json();
 }
 
 async function callGemini(model, messages, apiKey, maxTokens) {
@@ -148,26 +119,6 @@ export async function testConnection(provider, apiKey) {
       }
       return true;
     }
-    case 'anthropic': {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1,
-          messages: [{ role: 'user', content: 'hi' }],
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.text();
-        throw { status: res.status, message: `Anthropic: ${err}` };
-      }
-      return true;
-    }
     case 'gemini': {
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`
@@ -197,8 +148,6 @@ export async function analyzeRequest({ model, messages, clientKeys, maxTokens } 
   switch (provider) {
     case 'openai':
       return callOpenAI(model, messages, apiKey, maxTokens);
-    case 'anthropic':
-      return callAnthropic(model, messages, apiKey, maxTokens);
     case 'gemini':
       return callGemini(model, messages, apiKey, maxTokens);
     default:
