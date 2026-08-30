@@ -94,8 +94,12 @@ export function diffReport(before, after) {
       return false;
     });
   };
+  // 消えた側は出現回数で見る。「1と1」を「1」にすると情報が落ちるため。
   const removedNums = subtract(bn, an);
-  const addedNums = subtract(an, bn);
+  // 入った側は原文に一度も出てこない値だけを見る。捏造の検知が目的で、
+  // 原文にある数値の再掲(10秒を2回書く等)は問題にならない。
+  const inBefore = new Set(bn);
+  const addedNums = an.filter((n) => !inBefore.has(n));
 
   // 2-gramの重なりで行の対応を測る。日本語は分かち書きしないので文字2-gramを使う。
   const grams = (s) => new Set(Array.from({ length: Math.max(0, s.length - 1) }, (_, i) => s.slice(i, i + 2)));
