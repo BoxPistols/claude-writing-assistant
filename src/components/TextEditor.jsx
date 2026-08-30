@@ -16,15 +16,32 @@ import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEve
 import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT, hasUserKeys } from '../utils/rateLimit';
 import { listTargets, getTarget, targetInstruction, DEFAULT_TARGET_ID } from '../config/outputTargets';
 import { sanitizeForTarget, summarizeRemovals } from '../utils/sanitize';
-import { checkText, countBySeverity, diffReport } from '../utils/deadCliche';
+import { autoFix, checkText, countBySeverity, diffReport } from '../utils/deadCliche';
 
-// {key} 形式の穴埋め。文言は locales 側に置き、ここでは組み立てだけ行う。
+// {key}形式の穴埋め。文言はlocales側に置き、ここでは組み立てだけ行う。
 const fmt = (key, vars) => Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, v), t(key));
 
 const SEV_COLOR = { error: 'var(--cat-grammar)', warn: 'var(--cat-style)', info: 'var(--text-muted)' };
 
-// 検出例をルール単位に畳む。和欧間スペースのように 1 つのルールが何十件も当たることがあり、
+// 検出例をルール単位に畳む。和欧間スペースのように1つのルールが何十件も当たることがあり、
 // 生の一致をそのまま並べると他の指摘が埋もれる。件数の多い順に、読める見出しで出す。
+// 自動修正の内訳。ルール単位に畳んで件数を出し、代表例をbeforeからafterの形で1つ添える。
+// 和欧間スペースの除去は差が空白なので、そのまま出すと何も変わっていないように見える。可視化する。
+const visibleSpace = (s) => s.replace(/ /g, '␣').replace(/\t/g, '⇥');
+const fixSamples = (applied) => {
+  const groups = new Map();
+  for (const a of applied) {
+    const g = groups.get(a.ruleId) || { count: 0, before: a.before, after: a.after };
+    g.count++;
+    groups.set(a.ruleId, g);
+  }
+  return [...groups.values()]
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3)
+    .map((g) => `${visibleSpace(g.before)}→${visibleSpace(g.after)} ${g.count}`)
+    .join('、');
+};
+
 const clicheSamples = (violations) => {
   const groups = new Map();
   for (const v of violations) {
@@ -47,10 +64,10 @@ const clicheSamples = (violations) => {
 
 /**
  * 生成結果に何をしたかを出す。
- * 検査で 0 件だったことを「問題なし」と読ませないため、検査範囲を常に併記する。
+ * 検査で0件だったことを「問題なし」と読ませないため、検査範囲を常に併記する。
  */
 function ResultReport({ report }) {
-  const { removed, cliche, clicheError, diff, targetLabel } = report;
+  const { removed, fixed, cliche, clicheError, diff, targetLabel } = report;
   const counts = cliche?.counts;
   const total = cliche ? cliche.violations.length : 0;
 
@@ -76,6 +93,10 @@ function ResultReport({ report }) {
           ? removed.map((r) => `${r.label} ${r.count}`).join(' / ')
           : t('reportNothingRemoved')}
       </Row>
+
+      {fixed?.length > 0 && (
+        <Row label={t('reportFixed')}>{fixSamples(fixed)}</Row>
+      )}
 
       <Row label={t('reportCliche')}>
         {clicheError ? (
@@ -943,29 +964,37 @@ export default function TextEditor() {
 
   /**
    * 生成結果を出力先の規約に合わせて確定させる。
-   * 1) 署名・絵文字・Markdown を決定論的に除去する（LLM の指示追従に任せない）
-   * 2) 辞書でクリシェを検査する（検査範囲を必ず添える。0件は「問題なし」ではない）
-   * 3) 原文と照合し、行数・数値・原文と重ならない行を警告する（意味の破綻は辞書では捕れない）
+   * 1) 署名、絵文字、Markdownを決定論的に除去する(LLMの指示追従に任せない)
+   * 2) 辞書が決定論的に直せるもの(和欧間スペース等)を修正する
+   * 3) 残りを辞書で検査する(検査範囲を必ず添える。0件は「問題なし」ではない)
+   * 4) 原文と照合し、行数、数値、原文と重ならない行を警告する(意味の破綻は辞書では捕れない)
    */
   const finalizeResult = useCallback(async (original, raw, target) => {
-    const { text: cleaned, removed } = sanitizeForTarget(raw, target);
+    const { text: sanitized, removed } = sanitizeForTarget(raw, target);
     const report = {
       targetId: target.id,
       targetLabel: target.label[isJa ? 'ja' : 'en'],
       removed: summarizeRemovals(removed),
-      diff: diffReport(original, cleaned),
+      fixed: [],
+      diff: null,
       cliche: null,
       clicheError: null,
     };
+    // 辞書の読み込みに失敗しても、サニタイズ済みの本文は返す。
+    let finalText = sanitized;
     try {
-      const { violations, scope } = await checkText(cleaned, target.preset);
+      const { text: fixedText, applied } = await autoFix(sanitized, target.preset);
+      finalText = fixedText;
+      report.fixed = applied;
+      const { violations, scope } = await checkText(finalText, target.preset);
       report.cliche = { violations, scope, counts: countBySeverity(violations) };
     } catch (e) {
-      // 検査できなかったことを 0 件として見せない。失敗は失敗として出す。
+      // 検査できなかったことを0件として見せない。失敗は失敗として出す。
       console.error('Dictionary check failed:', e);
       report.clicheError = e.message || String(e);
     }
-    return { original, rewritten: cleaned, report };
+    report.diff = diffReport(original, finalText);
+    return { original, rewritten: finalText, report };
   }, [isJa]);
 
   const handleRewrite = useCallback(async () => {

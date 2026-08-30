@@ -1,24 +1,24 @@
 // 出力先テンプレートの禁止事項を、生成結果に対して決定論的に適用する。
-// LLM の指示追従に依存すると混入が残るため、署名と絵文字の除去はここで確実に行う。
+// LLMの指示追従に依存すると混入が残るため、署名と絵文字の除去はここで確実に行う。
 
-// AI 署名として落とす行。label は利用者に「何を消したか」を見せるために持つ。
+// AI署名として落とす行。labelは利用者に「何を消したか」を見せるために持つ。
 const SIGNATURE_LINES = [
-  { label: 'Claude Code の生成署名', re: /^\s*>?\s*(?:🤖\s*)?Generated\s+with\s+\[?Claude\s+Code\]?(?:\([^)]*\))?\s*$/i },
-  { label: 'Claude Code の生成署名', re: /^\s*>?\s*_*\s*Generated\s+by\s+\[?Claude\s+Code\]?(?:\([^)]*\))?\s*_*\s*$/i },
-  { label: 'Co-Authored-By 署名', re: /^\s*>?\s*Co-?Authored-?By:\s*Claude\b.*$/i },
-  { label: 'Claude への言及を含む署名行', re: /^\s*>?\s*.*(?:claude\.ai\/code|claude\.com\/claude-code|noreply@anthropic\.com).*$/i },
-  { label: 'Claude 由来を示す署名', re: /^\s*>?\s*(?:🤖\s*)?(?:Made|Written|Created|Authored)\s+(?:with|by)\s+Claude\b.*$/i },
-  { label: 'Claude 由来を示す署名', re: /^\s*>?\s*(?:🤖\s*)?Claude\s+Code\s+(?:により|によって|が)\s*(?:生成|作成).*$/ },
+  { label: 'Claude Codeの生成署名', re: /^\s*>?\s*(?:🤖\s*)?Generated\s+with\s+\[?Claude\s+Code\]?(?:\([^)]*\))?\s*$/i },
+  { label: 'Claude Codeの生成署名', re: /^\s*>?\s*_*\s*Generated\s+by\s+\[?Claude\s+Code\]?(?:\([^)]*\))?\s*_*\s*$/i },
+  { label: 'Co-Authored-By署名', re: /^\s*>?\s*Co-?Authored-?By:\s*Claude\b.*$/i },
+  { label: 'Claudeへの言及を含む署名行', re: /^\s*>?\s*.*(?:claude\.ai\/code|claude\.com\/claude-code|noreply@anthropic\.com).*$/i },
+  { label: 'Claude由来を示す署名', re: /^\s*>?\s*(?:🤖\s*)?(?:Made|Written|Created|Authored)\s+(?:with|by)\s+Claude\b.*$/i },
+  { label: 'Claude由来を示す署名', re: /^\s*>?\s*(?:🤖\s*)?Claude\s+Code\s+(?:により|によって|が)\s*(?:生成|作成).*$/ },
 ];
 
-// 絵文字。異体字セレクタ・肌色・ZWJ 連結・国旗・キーキャップまでを 1 つの塊として扱う。
+// 絵文字。異体字セレクタ・肌色・ZWJ連結・国旗・キーキャップまでを1つの塊として扱う。
 const EMOJI_RE = /(?:\p{Extended_Pictographic}(?:️|︎)?(?:\p{Emoji_Modifier})?(?:‍\p{Extended_Pictographic}(?:️|︎)?(?:\p{Emoji_Modifier})?)*|\p{Regional_Indicator}{2}|[0-9#*]️?⃣)/gu;
 // 記号として本文に使われうるものは絵文字扱いしない。
 const EMOJI_KEEP = new Set(['™', '©', '®', '‼', '⁉']);
 
 const isRule = (line) => /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(line);
 
-/** AI 署名の行を落とす。署名を導いていた末尾の水平線も一緒に落とす。 */
+/** AI署名の行を落とす。署名を導いていた末尾の水平線も一緒に落とす。 */
 export function stripAiSignatures(text) {
   const removed = [];
   const lines = text.split('\n');
@@ -59,9 +59,9 @@ export function stripEmoji(text) {
 }
 
 /**
- * Markdown 記法を外して本文を残す。
- * level 'minimal' は見出しと強調だけ落とす (コミットメッセージ向け。- の箇条書きは git の慣習なので残す)。
- * level 'none' は Slack 向けにリンクと箇条書き記号まで落とす。
+ * Markdown記法を外して本文を残す。
+ * level 'minimal' は見出しと強調だけ落とす (コミットメッセージ向け。- の箇条書きはgitの慣習なので残す)。
+ * level 'none' はSlack向けにリンクと箇条書き記号まで落とす。
  */
 export function stripMarkdown(text, level = 'none') {
   const removed = [];
@@ -75,7 +75,7 @@ export function stripMarkdown(text, level = 'none') {
 
   out = out
     .replace(/`([^`\n]+)`/g, (_, s) => { mark('インラインコード記法'); return s; })
-    // URL はフルパスのまま残す。Slack ではラベルより URL 本体が要る。
+    // URLはフルパスのまま残す。SlackではラベルよりURL本体が要る。
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, url) => {
       mark('リンク記法'); return label.trim() === url.trim() ? url : `${label} ${url}`;
     })
@@ -99,7 +99,7 @@ export function sanitizeForTarget(text, target) {
   if (target.markdown === 'minimal') run((s) => stripMarkdown(s, 'minimal'));
   if (target.markdown === 'none') run((s) => stripMarkdown(s, 'none'));
 
-  // 空行が 3 行以上続くのは整形の副作用なので 1 行に詰める。
+  // 空行が3行以上続くのは整形の副作用なので1行に詰める。
   out = out.replace(/\n{3,}/g, '\n\n').replace(/[ \t]+$/gm, '').trim();
   return { text: out, removed };
 }

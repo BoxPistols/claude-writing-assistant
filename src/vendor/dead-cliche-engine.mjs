@@ -1,5 +1,5 @@
-// 上流 https://boxpistols.github.io/ux-writing-dead-cliche の複製。直接編集しない。
-// 更新は npm run sync:cliche。辞書の変更要望は ux-writing-dead-cliche 側の issue へ。
+// 上流(https://boxpistols.github.io/ux-writing-dead-cliche)の複製。直接編集しない。
+// 更新はnpm run sync:cliche。辞書の変更要望はux-writing-dead-cliche側のissueへ。
 // 検出エンジン。辞書 (rules/*.yml) を単一の情報源とし、
 // CLI・textlint・Claudeプラグインのすべてがここを通る。
 

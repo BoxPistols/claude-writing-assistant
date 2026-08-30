@@ -1,10 +1,10 @@
-// ux-writing-dead-cliche の辞書で本文を検査する。
-// 判定ロジックと プリセット解決は上流の engine に任せる。ここでルールを書かない。
-// 取り込みは npm run sync:cliche (scripts/sync-dead-cliche.mjs)。
+// ux-writing-dead-clicheの辞書で本文を検査する。
+// 判定ロジックとプリセット解決は上流のengineに任せる。ここでルールを書かない。
+// 取り込みはnpm run sync:cliche (scripts/sync-dead-cliche.mjs)。
 
 let cache = null;
 
-/** 辞書と engine を遅延読み込みする。初回だけ読み、以降は使い回す。 */
+/** 辞書とengineを遅延読み込みする。初回だけ読み、以降は使い回す。 */
 async function load() {
   if (cache) return cache;
   const [engine, mod] = await Promise.all([
@@ -15,7 +15,7 @@ async function load() {
   return cache;
 }
 
-/** 画面に出す検査範囲。0 件を「問題なし」と誤読させないために常に添える。 */
+/** 画面に出す検査範囲。0件を「問題なし」と誤読させないために常に添える。 */
 export async function getPresetScope(presetName) {
   const { engine, data } = await load();
   const info = data.presetInfo?.[presetName];
@@ -33,6 +33,20 @@ export async function getPresetScope(presetName) {
 }
 
 /**
+ * 辞書が持つ決定論的な修正を適用する。修正テンプレートは辞書側にあり、ここでは書かない。
+ * businessプリセットの対象は3ルール(和欧間スペース、感嘆符の重ね、することができます)で、
+ * いずれも文意を変えない。自動で直せるものを先に消し、人が判断すべき指摘だけを検査に残す。
+ * @returns {Promise<{text: string, applied: Array<{ruleId: string, before: string, after: string}>}>}
+ */
+export async function autoFix(text, presetName = 'business') {
+  const { engine, data } = await load();
+  if (!data.presetInfo?.[presetName]) throw new Error(`未知のプリセット: ${presetName}`);
+  const rules = engine.rulesForPresetData(data, presetName);
+  // maskedTextを渡さないとコードブロックとインラインコードの中身まで書き換わる。
+  return engine.applyFixes(text, rules, { maskedText: engine.maskMarkdownCode(text) });
+}
+
+/**
  * 本文を検査する。コードブロックとインラインコードは除外する。
  * @returns {Promise<{violations: Array, scope: object|null}>}
  */
@@ -41,8 +55,8 @@ export async function checkText(text, presetName = 'business') {
   if (!data.presetInfo?.[presetName]) throw new Error(`未知のプリセット: ${presetName}`);
   const rules = engine.rulesForPresetData(data, presetName);
   const masked = engine.maskMarkdownCode(text);
-  // 書式ルールの matched は空白や記号だけになることがあり、そのままでは何に当たったか読めない。
-  // 辞書が持つ代表表現とカテゴリ名を violation に足して、画面で説明できるようにする。
+  // 書式ルールのmatchedは空白や記号だけになることがあり、そのままでは何に当たったか読めない。
+  // 辞書が持つ代表表現とカテゴリ名をviolationに足して、画面で説明できるようにする。
   const byId = new Map(data.rules.map((r) => [r.id, r]));
   const violations = engine.check(masked, rules).map((v) => {
     const rule = byId.get(v.ruleId);
@@ -51,7 +65,7 @@ export async function checkText(text, presetName = 'business') {
   return { violations, scope: await getPresetScope(presetName) };
 }
 
-/** 重大度ごとの件数。engine の JSON 出力と同じ形に揃える。 */
+/** 重大度ごとの件数。engineのJSON出力と同じ形に揃える。 */
 export function countBySeverity(violations) {
   return violations.reduce(
     (acc, v) => { acc[v.severity] = (acc[v.severity] || 0) + 1; return acc; },
@@ -61,7 +75,7 @@ export function countBySeverity(violations) {
 
 /**
  * 書き直し前後を行単位で照合する。
- * 辞書は「辞書にある表現の有無」しか見ないので、意味が壊れても 0 件になりうる。
+ * 辞書は「辞書にある表現の有無」しか見ないので、意味が壊れても0件になりうる。
  * 行数の変化・数値の変化・原文とほとんど重ならない行を、利用者に確認させるために返す。
  */
 export function diffReport(before, after) {
@@ -72,7 +86,7 @@ export function diffReport(before, after) {
   const removedNums = bn.filter((n) => !an.includes(n));
   const addedNums = an.filter((n) => !bn.includes(n));
 
-  // 2-gram の重なりで行の対応を測る。日本語は分かち書きしないので文字 2-gram を使う。
+  // 2-gramの重なりで行の対応を測る。日本語は分かち書きしないので文字2-gramを使う。
   const grams = (s) => new Set(Array.from({ length: Math.max(0, s.length - 1) }, (_, i) => s.slice(i, i + 2)));
   const overlap = (a, b) => {
     const ga = grams(a), gb = grams(b);
