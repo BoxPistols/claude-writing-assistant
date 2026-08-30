@@ -14,7 +14,7 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import TtsSettings, { TtsSettingsForm } from './TtsSettings';
 import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEvent, matchShortcut, DEFAULT_SHORTCUTS } from '../utils/platform';
 import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT, hasUserKeys } from '../utils/rateLimit';
-import { OUTPUT_TARGETS, listTargets, getTarget, targetInstruction, DEFAULT_TARGET_ID } from '../config/outputTargets';
+import { OUTPUT_TARGETS, listTargets, getTarget, targetInstruction, markdownRule, DEFAULT_TARGET_ID } from '../config/outputTargets';
 import { sanitizeForTarget, summarizeRemovals } from '../utils/sanitize';
 import { autoFix, checkText, countBySeverity, diffReport } from '../utils/deadCliche';
 
@@ -332,13 +332,16 @@ ${text}`;
   return res.json();
 };
 
-const rewriteViaProxy = async (model, text, clientKeys, targetRules = '') => {
+const rewriteViaProxy = async (model, text, clientKeys, targetRules = '', markdown = 'none') => {
   const isJa = locale.startsWith('ja');
+  // 出力先の指示が無いとき(自由)は緩和しない。緩和が要るのは、後段で
+  // Markdownを許す指示と前段の禁止が食い違う場合だけ。
+  const mdRule = markdownRule(targetRules ? markdown : 'none', isJa);
   const basePrompt = isJa
     ? `あなたは日本語のプロ編集者です。以下の文章を、人間が書いたと感じさせる自然な文章に書き直してください。意味・事実は変えないでください。トーンも基本的に維持しますが、文体ルール（です・ます調の統一等）が優先されます。
 
 【厳守ルール：記号・表記】
-- Markdown記法を使わない（**太字**のアスタリスク、#見出しなど一切禁止）
+${mdRule}
 - 「」のカギ括弧による強調を削り、文脈に溶かす
 - （）による補足を最小限にし、必要なら文に組み込む
 - 「： 」（コロン直後に半角スペース）を使わない。太字ヘッダー＋コロン＋説明文の箇条書きパターンも禁止
@@ -385,7 +388,7 @@ const rewriteViaProxy = async (model, text, clientKeys, targetRules = '') => {
 Strictly follow these rules:
 
 Symbols & Formatting:
-- No Markdown (**bold** asterisks, # headings, etc.)
+${mdRule}
 - No inline-header bullet lists (bold header + colon + description pattern)
 - Minimize quotation marks used for emphasis; integrate into prose
 - Minimize parenthetical asides; incorporate naturally into sentences
@@ -544,7 +547,7 @@ const COMPOSE_PROMPT_JA = `あなたは日本語の編集者です。この後�
 
 【文体】
 - 敬体（です・ます）か常体（だ・である）かは、目的と読み手にふさわしい方へ全体を統一する。下書きの混在に引きずられない。手がかりがなければ下書きで多い方に合わせる。
-- Markdown記法や装飾記号を使わない（**太字**、#見出し、箇条書き記号、絵文字など）。チャット共有など箇条書きが自然な形式では、記号を使わない短い行の列挙にとどめる。
+${mdRule}。装飾記号と絵文字は使わない。箇条書きが自然な形式でも、記号を並べない
 
 【自然な日本語（AIっぽさを消す）】
 - 「さらに」「また」「したがって」「そのため」などの接続詞を多用しない。
@@ -581,7 +584,7 @@ const COMPOSE_PROMPT_EN = `You are a Japanese-language editor. Reconstruct the u
 
 [Style]
 - Unify the whole text into either polite form (desu/masu) or plain form (da/dearu), whichever suits the purpose and reader; do not be dragged by mixed forms in the draft. If there is no clue, follow whichever is more common in the draft.
-- Do not use Markdown or decorative symbols (**bold**, # headings, bullet markers, emoji). In formats where bullets are natural, such as a chat share, use short lines without symbols.
+${mdRule}. No decorative symbols or emoji.
 
 [Natural Japanese (removing the AI feel)]
 - Do not overuse conjunctions such as "furthermore," "also," "therefore," "for that reason."
@@ -593,8 +596,11 @@ const COMPOSE_PROMPT_EN = `You are a Japanese-language editor. Reconstruct the u
 [Output]
 - Output only the reconstructed body text. Do not output any explanation, preamble, notes, heading labels, or section names. Do not add labels like "Subject:"; produce body text ready to paste as is.`;
 
-const composeViaProxy = async (model, text, clientKeys, { background = '', purpose = '', targetRules = '' } = {}) => {
+const composeViaProxy = async (model, text, clientKeys, { background = '', purpose = '', targetRules = '', markdown = 'none' } = {}) => {
   const isJa = locale.startsWith('ja');
+  // 出力先の指示が無いとき(自由)は緩和しない。緩和が要るのは、後段で
+  // Markdownを許す指示と前段の禁止が食い違う場合だけ。
+  const mdRule = markdownRule(targetRules ? markdown : 'none', isJa);
   const instructions = isJa ? COMPOSE_PROMPT_JA : COMPOSE_PROMPT_EN;
   const bg = background.trim();
   const pp = purpose.trim();
@@ -1127,7 +1133,7 @@ export default function TextEditor() {
     setSuggestions([]);
     startProgress(modelId, text.length);
     try {
-      const data = await rewriteViaProxy(modelId, text, clientKeys, targetInstruction(activeTarget, isJa));
+      const data = await rewriteViaProxy(modelId, text, clientKeys, targetInstruction(activeTarget, isJa), activeTarget.markdown);
       recordUsage(); setRemaining(getRemaining());
       const rewritten = data.content?.[0]?.text?.trim() || '';
       if (rewritten) setRewriteResult(await finalizeResult(text, rewritten, activeTarget));
@@ -1149,7 +1155,7 @@ export default function TextEditor() {
     startProgress(modelId, text.length);
     try {
       const data = await composeViaProxy(modelId, text, clientKeys, {
-        background, purpose, targetRules: targetInstruction(activeTarget, isJa),
+        background, purpose, targetRules: targetInstruction(activeTarget, isJa), markdown: activeTarget.markdown,
       });
       recordUsage(); setRemaining(getRemaining());
       const composed = data.content?.[0]?.text?.trim() || '';
@@ -1200,7 +1206,7 @@ export default function TextEditor() {
         .catch((e) => { console.error('[analyze]', e); if (e.message?.includes('401')) alert(t('failedUnauthorized')); })
         .finally(() => setIsAnalyzing(false)),
 
-      rewriteViaProxy(modelId, text, clientKeys, targetInstruction(activeTarget, isJa))
+      rewriteViaProxy(modelId, text, clientKeys, targetInstruction(activeTarget, isJa), activeTarget.markdown)
         .then(async (data) => {
           recordUsage();
           const rewritten = data.content?.[0]?.text?.trim() || '';

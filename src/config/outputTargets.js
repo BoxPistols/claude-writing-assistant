@@ -176,6 +176,26 @@ Target: Slack review request
   },
 ];
 
+// 基本プロンプトのMarkdown制約。出力先のmarkdown設定と食い違うと、
+// 前段の禁止が後段の許可を打ち消して構造が失われるため、ここで一本化する。
+const MARKDOWN_RULE = {
+  full: {
+    ja: '- Markdownの見出しと箇条書きは使ってよい。ただし**太字**で語を飾らない',
+    en: '- Markdown headings and lists are allowed, but do not decorate words with **bold**',
+  },
+  minimal: {
+    ja: '- 見出し記法(#)と**太字**は使わない。-の箇条書きは使ってよい',
+    en: '- No headings or **bold**. "-" bullet lists are allowed',
+  },
+  none: {
+    ja: '- Markdown記法を使わない(**太字**のアスタリスク、#見出しなど一切禁止)',
+    en: '- No Markdown (**bold** asterisks, # headings, etc.)',
+  },
+};
+
+/** 基本プロンプトに差し込むMarkdown制約を返す。 */
+export const markdownRule = (level, isJa) => (MARKDOWN_RULE[level] || MARKDOWN_RULE.none)[isJa ? 'ja' : 'en'];
+
 export const DEFAULT_TARGET_ID = 'free';
 
 export const getTarget = (id) => OUTPUT_TARGETS.find((t) => t.id === id) || OUTPUT_TARGETS[0];

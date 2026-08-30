@@ -81,10 +81,21 @@ export function countBySeverity(violations) {
 export function diffReport(before, after) {
   const bl = before.split('\n').filter((l) => l.trim());
   const al = after.split('\n').filter((l) => l.trim());
-  const nums = (s) => (s.match(/\d+(?:[.,]\d+)*/g) || []);
+  const nums = (s) => (s.match(/[+-]?\d+(?:[.,]\d+)*/g) || []);
   const bn = nums(before), an = nums(after);
-  const removedNums = bn.filter((n) => !an.includes(n));
-  const addedNums = an.filter((n) => !bn.includes(n));
+  // 出現回数で引き算する。includesだと「1と1」を「1」にしても差が出ない。
+  const subtract = (from, against) => {
+    const rest = new Map();
+    for (const n of against) rest.set(n, (rest.get(n) || 0) + 1);
+    return from.filter((n) => {
+      const c = rest.get(n) || 0;
+      if (!c) return true;
+      rest.set(n, c - 1);
+      return false;
+    });
+  };
+  const removedNums = subtract(bn, an);
+  const addedNums = subtract(an, bn);
 
   // 2-gramの重なりで行の対応を測る。日本語は分かち書きしないので文字2-gramを使う。
   const grams = (s) => new Set(Array.from({ length: Math.max(0, s.length - 1) }, (_, i) => s.slice(i, i + 2)));

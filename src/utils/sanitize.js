@@ -74,13 +74,15 @@ export function stripMarkdown(text, level = 'none') {
   if (level === 'minimal') return { text: out, removed };
 
   out = out
+    // フェンス行を先に落とす。中身は本文として残す。
+    .replace(/^\s*```[^\n]*$/gm, () => { mark('コードフェンス記法'); return ''; })
     .replace(/`([^`\n]+)`/g, (_, s) => { mark('インラインコード記法'); return s; })
     // URLはフルパスのまま残す。SlackではラベルよりURL本体が要る。
     .replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, url) => {
       mark('リンク記法'); return label.trim() === url.trim() ? url : `${label} ${url}`;
     })
     .replace(/^\s{0,3}>\s?/gm, () => { mark('引用記法'); return ''; })
-    .replace(/^(\s*)[-*+]\s+/gm, (_, sp) => { mark('箇条書き記号'); return `${sp}・`; });
+    .replace(/^(\s*)(?:[-*+]|\d+[.)])\s+/gm, (_, sp) => { mark('箇条書き記号'); return `${sp}・`; });
   return { text: out, removed };
 }
 
