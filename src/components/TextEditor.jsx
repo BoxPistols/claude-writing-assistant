@@ -14,6 +14,114 @@ import { useTextToSpeech } from '../hooks/useTextToSpeech';
 import TtsSettings, { TtsSettingsForm } from './TtsSettings';
 import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEvent, matchShortcut, DEFAULT_SHORTCUTS } from '../utils/platform';
 import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT, hasUserKeys } from '../utils/rateLimit';
+import { listTargets, getTarget, targetInstruction, DEFAULT_TARGET_ID } from '../config/outputTargets';
+import { sanitizeForTarget, summarizeRemovals } from '../utils/sanitize';
+import { checkText, countBySeverity, diffReport } from '../utils/deadCliche';
+
+// {key} 形式の穴埋め。文言は locales 側に置き、ここでは組み立てだけ行う。
+const fmt = (key, vars) => Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, v), t(key));
+
+const SEV_COLOR = { error: 'var(--cat-grammar)', warn: 'var(--cat-style)', info: 'var(--text-muted)' };
+
+// 検出例をルール単位に畳む。和欧間スペースのように 1 つのルールが何十件も当たることがあり、
+// 生の一致をそのまま並べると他の指摘が埋もれる。件数の多い順に、読める見出しで出す。
+const clicheSamples = (violations) => {
+  const groups = new Map();
+  for (const v of violations) {
+    const g = groups.get(v.ruleId) || { count: 0, label: '', catLabel: v.catLabel };
+    g.count++;
+    // 空白や記号だけの一致は見出しにならないので、読める一致が出るまで探す。
+    if (!g.label) {
+      const s = (v.matched || '').trim();
+      if (s && /[^\s\p{P}\p{S}\d]/u.test(s)) g.label = s;
+    }
+    groups.set(v.ruleId, g);
+  }
+  const sorted = [...groups.values()].sort((a, b) => b.count - a.count);
+  const shown = sorted.slice(0, 4).map((g) => {
+    const name = g.label || g.catLabel || '';
+    return g.count > 1 ? `${name} ${g.count}` : name;
+  }).filter(Boolean);
+  return shown.join('、') + (sorted.length > 4 ? '…' : '');
+};
+
+/**
+ * 生成結果に何をしたかを出す。
+ * 検査で 0 件だったことを「問題なし」と読ませないため、検査範囲を常に併記する。
+ */
+function ResultReport({ report }) {
+  const { removed, cliche, clicheError, diff, targetLabel } = report;
+  const counts = cliche?.counts;
+  const total = cliche ? cliche.violations.length : 0;
+
+  const Row = ({ label, children }) => (
+    <div style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
+      <span style={{ flexShrink: 0, width: 108, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)' }}>{label}</span>
+      <div style={{ flex: 1, minWidth: 0, fontSize: 12, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{children}</div>
+    </div>
+  );
+
+  return (
+    <div style={{
+      flexShrink: 0, maxHeight: 190, overflowY: 'auto',
+      padding: '12px 24px', borderTop: '1px solid var(--border-subtle)',
+      background: 'var(--bg-toolbar)', display: 'flex', flexDirection: 'column', gap: 7,
+    }}>
+      <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
+        {t('reportTitle')} — {targetLabel}
+      </div>
+
+      <Row label={t('reportRemoved')}>
+        {removed.length
+          ? removed.map((r) => `${r.label} ${r.count}`).join(' / ')
+          : t('reportNothingRemoved')}
+      </Row>
+
+      <Row label={t('reportCliche')}>
+        {clicheError ? (
+          <span style={{ color: 'var(--cat-grammar)' }}>{fmt('reportClicheFailed', { error: clicheError })}</span>
+        ) : (
+          <>
+            {total > 0 && (
+              <div style={{ marginBottom: 3 }}>
+                {['error', 'warn', 'info'].filter((k) => counts[k] > 0).map((k) => (
+                  <span key={k} style={{ marginRight: 10, color: SEV_COLOR[k], fontWeight: 600 }}>{k} {counts[k]}</span>
+                ))}
+                <span style={{ color: 'var(--text-muted)' }}>{clicheSamples(cliche.violations)}</span>
+              </div>
+            )}
+            {total === 0 && <div style={{ marginBottom: 3 }}>{t('reportClicheNone')}</div>}
+            {cliche?.scope && (
+              <div style={{ color: 'var(--text-muted)' }}>
+                {fmt('reportClicheScope', {
+                  preset: cliche.scope.preset,
+                  count: cliche.scope.activeCount,
+                  version: cliche.scope.version,
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </Row>
+
+      <Row label={t('reportDiff')}>
+        {diff.hasWarnings ? (
+          <>
+            {diff.lineCountChanged && <div>{fmt('reportDiffLines', { before: diff.lineCountBefore, after: diff.lineCountAfter })}</div>}
+            {diff.removedNumbers.length > 0 && (
+              <div style={{ color: 'var(--cat-grammar)' }}>{fmt('reportDiffNumbersRemoved', { list: diff.removedNumbers.join(', ') })}</div>
+            )}
+            {diff.addedNumbers.length > 0 && (
+              <div style={{ color: 'var(--cat-grammar)' }}>{fmt('reportDiffNumbersAdded', { list: diff.addedNumbers.join(', ') })}</div>
+            )}
+            {diff.driftedLines.length > 0 && <div>{fmt('reportDiffDrifted', { count: diff.driftedLines.length })}</div>}
+            <div style={{ color: 'var(--text-muted)' }}>{t('reportDiffAsk')}</div>
+          </>
+        ) : t('reportDiffClean')}
+      </Row>
+    </div>
+  );
+}
 
 const JP_SANS_FALLBACK = "'Noto Sans JP', 'BIZ UDPGothic', 'Yu Gothic', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Meiryo', 'Segoe UI', -apple-system, sans-serif";
 const JP_SERIF_FALLBACK = "'Noto Serif JP', 'BIZ UDPMincho', 'Hiragino Mincho ProN', 'Yu Mincho', 'MS PMincho', serif";
@@ -160,9 +268,9 @@ ${text}`;
   return res.json();
 };
 
-const rewriteViaProxy = async (model, text, clientKeys) => {
+const rewriteViaProxy = async (model, text, clientKeys, targetRules = '') => {
   const isJa = locale.startsWith('ja');
-  const prompt = isJa
+  const basePrompt = isJa
     ? `あなたは日本語のプロ編集者です。以下の文章を、人間が書いたと感じさせる自然な文章に書き直してください。意味・事実は変えないでください。トーンも基本的に維持しますが、文体ルール（です・ます調の統一等）が優先されます。
 
 【厳守ルール：記号・表記】
@@ -207,12 +315,7 @@ const rewriteViaProxy = async (model, text, clientKeys) => {
 - 「〜における」「〜に関して」を多用しない。もっと短く言い換える
 - 漠然と明るい結論（「今後の発展が期待されます」「未来は明るい」等）がAI的な定型表現である場合は、元の意図を保ちつつ具体的な結びに言い換える（意味やトーンが変わる場合は無理に変えない）
 
-【出力形式】
-書き換え後の文章だけを出力する。説明・前置き・注意書きは一切出力しない。
-
----
-元の文章：
-${text}`
+`
     : `You are a professional editor. Rewrite the following text to sound natural and human-written. Preserve the original meaning, facts, and tone exactly.
 
 Strictly follow these rules:
@@ -251,11 +354,15 @@ Content & Style:
 - Back up strong evaluations with evidence or cut them, only when they are clearly AI-generated filler
 - No promotional language ("groundbreaking", "breathtaking", "stunning", "vibrant") unless it reflects the original author's intent
 
-Output: Output ONLY the rewritten text. No explanation, preamble, or notes.
+`;
 
----
-Original text:
-${text}`;
+  // 出力先テンプレートの制約は基本ルールの後、出力形式の前に置く。
+  // 出力先固有の指示のほうが後に来るので、衝突したときはそちらが優先される。
+  const targetSection = targetRules ? `\n\n${targetRules}` : '';
+  const outputRule = isJa
+    ? '\n\n【出力形式】\n書き換え後の文章だけを出力する。説明・前置き・注意書きは一切出力しない。'
+    : '\n\nOutput: Output ONLY the rewritten text. No explanation, preamble, or notes.';
+  const prompt = `${basePrompt}${targetSection}${outputRule}\n\n---\n${isJa ? '元の文章：' : 'Original text:'}\n${text}`;
 
   const res = await fetch('/api/analyze', {
     method: 'POST',
@@ -353,7 +460,7 @@ const COMPOSE_PROMPT_EN = `You are a Japanese-language editor. Reconstruct the u
 [Output]
 - Output only the reconstructed body text. Do not output any explanation, preamble, notes, heading labels, or section names. Do not add labels like "Subject:"; produce body text ready to paste as is.`;
 
-const composeViaProxy = async (model, text, clientKeys, { background = '', purpose = '' } = {}) => {
+const composeViaProxy = async (model, text, clientKeys, { background = '', purpose = '', targetRules = '' } = {}) => {
   const isJa = locale.startsWith('ja');
   const instructions = isJa ? COMPOSE_PROMPT_JA : COMPOSE_PROMPT_EN;
   const bg = background.trim();
@@ -361,8 +468,10 @@ const composeViaProxy = async (model, text, clientKeys, { background = '', purpo
   // 背景・目的は入力がある時だけセクションとして付加（空欄でも破綻しない設計）
   const bgSection = bg ? (isJa ? `\n\n【背景・状況】\n${bg}` : `\n\n[Background/Situation]\n${bg}`) : '';
   const ppSection = pp ? (isJa ? `\n\n【目的・ゴール】\n${pp}` : `\n\n[Purpose/Goal]\n${pp}`) : '';
+  // 出力先の制約は背景・目的より後に置く。宛先の規約は書き手の意図より強い
+  const targetSection = targetRules ? `\n\n${targetRules}` : '';
   const draftLabel = isJa ? '【下書き】' : '[Draft]';
-  const prompt = `${instructions}${bgSection}${ppSection}\n\n${draftLabel}\n${text}`;
+  const prompt = `${instructions}${bgSection}${ppSection}${targetSection}\n\n${draftLabel}\n${text}`;
 
   const res = await fetch('/api/analyze', {
     method: 'POST',
@@ -534,6 +643,11 @@ export default function TextEditor() {
   const [customInstruction, setCustomInstruction] = useState(() => {
     try { return localStorage.getItem('wa-custom-instruction') || ''; } catch { return ''; }
   });
+  // 出力先（PR本文 / issue / コミット / PRレビュー / Slack依頼）。
+  // プロンプトの制約・生成後のサニタイズ・辞書プリセットの3つを一括で決める。
+  const [outputTargetId, setOutputTargetId] = useState(() => {
+    try { return localStorage.getItem('wa-output-target') || DEFAULT_TARGET_ID; } catch { return DEFAULT_TARGET_ID; }
+  });
   // 文脈整形（compose）用の背景・目的・パネル開閉状態
   const [background, setBackground] = useState(() => {
     try { return localStorage.getItem('wa-compose-bg') || ''; } catch { return ''; }
@@ -659,6 +773,10 @@ export default function TextEditor() {
   useEffect(() => {
     try { localStorage.setItem('wa-custom-instruction', customInstruction); } catch {}
   }, [customInstruction]);
+
+  useEffect(() => {
+    try { localStorage.setItem('wa-output-target', outputTargetId); } catch {}
+  }, [outputTargetId]);
 
   useEffect(() => { try { localStorage.setItem('wa-compose-bg', background); } catch {} }, [background]);
   useEffect(() => { try { localStorage.setItem('wa-compose-purpose', purpose); } catch {} }, [purpose]);
@@ -819,6 +937,37 @@ export default function TextEditor() {
     finally { setIsAnalyzing(false); stopProgress(); }
   }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress, checkRateLimit]);
 
+  const isJa = locale.startsWith('ja');
+  const targets = useMemo(() => listTargets(isJa), [isJa]);
+  const activeTarget = useMemo(() => getTarget(outputTargetId), [outputTargetId]);
+
+  /**
+   * 生成結果を出力先の規約に合わせて確定させる。
+   * 1) 署名・絵文字・Markdown を決定論的に除去する（LLM の指示追従に任せない）
+   * 2) 辞書でクリシェを検査する（検査範囲を必ず添える。0件は「問題なし」ではない）
+   * 3) 原文と照合し、行数・数値・原文と重ならない行を警告する（意味の破綻は辞書では捕れない）
+   */
+  const finalizeResult = useCallback(async (original, raw, target) => {
+    const { text: cleaned, removed } = sanitizeForTarget(raw, target);
+    const report = {
+      targetId: target.id,
+      targetLabel: target.label[isJa ? 'ja' : 'en'],
+      removed: summarizeRemovals(removed),
+      diff: diffReport(original, cleaned),
+      cliche: null,
+      clicheError: null,
+    };
+    try {
+      const { violations, scope } = await checkText(cleaned, target.preset);
+      report.cliche = { violations, scope, counts: countBySeverity(violations) };
+    } catch (e) {
+      // 検査できなかったことを 0 件として見せない。失敗は失敗として出す。
+      console.error('Dictionary check failed:', e);
+      report.clicheError = e.message || String(e);
+    }
+    return { original, rewritten: cleaned, report };
+  }, [isJa]);
+
   const handleRewrite = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
     if (!text) { alert(t('pleaseEnterText')); return; }
@@ -829,16 +978,16 @@ export default function TextEditor() {
     setSuggestions([]);
     startProgress(modelId, text.length);
     try {
-      const data = await rewriteViaProxy(modelId, text, clientKeys);
+      const data = await rewriteViaProxy(modelId, text, clientKeys, targetInstruction(activeTarget, isJa));
       recordUsage(); setRemaining(getRemaining());
       const rewritten = data.content?.[0]?.text?.trim() || '';
-      if (rewritten) setRewriteResult({ original: text, rewritten });
+      if (rewritten) setRewriteResult(await finalizeResult(text, rewritten, activeTarget));
       else alert(t('failedToRewrite'));
     } catch (e) {
       console.error('Rewrite error:', e);
       alert(e.message?.includes('401') ? t('failedUnauthorized') : t('failedToRewrite'));
     } finally { setIsRewriting(false); stopProgress(); }
-  }, [resolveModel, clientKeys, startProgress, stopProgress, checkRateLimit]);
+  }, [resolveModel, clientKeys, startProgress, stopProgress, checkRateLimit, activeTarget, isJa, finalizeResult]);
 
   const handleCompose = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
@@ -850,16 +999,18 @@ export default function TextEditor() {
     setSuggestions([]);
     startProgress(modelId, text.length);
     try {
-      const data = await composeViaProxy(modelId, text, clientKeys, { background, purpose });
+      const data = await composeViaProxy(modelId, text, clientKeys, {
+        background, purpose, targetRules: targetInstruction(activeTarget, isJa),
+      });
       recordUsage(); setRemaining(getRemaining());
       const composed = data.content?.[0]?.text?.trim() || '';
-      if (composed) { setComposeResult({ original: text, rewritten: composed }); setComposeModalOpen(false); }
+      if (composed) { setComposeResult(await finalizeResult(text, composed, activeTarget)); setComposeModalOpen(false); }
       else alert(t('failedToCompose'));
     } catch (e) {
       console.error('Compose error:', e);
       alert(e.message?.includes('401') ? t('failedUnauthorized') : t('failedToCompose'));
     } finally { setIsComposing(false); stopProgress(); }
-  }, [resolveModel, clientKeys, background, purpose, startProgress, stopProgress, checkRateLimit]);
+  }, [resolveModel, clientKeys, background, purpose, startProgress, stopProgress, checkRateLimit, activeTarget, isJa, finalizeResult]);
 
   const handleRunAll = useCallback(async () => {
     const text = editorRef.current?.innerText?.trim();
@@ -900,11 +1051,11 @@ export default function TextEditor() {
         .catch((e) => { console.error('[analyze]', e); if (e.message?.includes('401')) alert(t('failedUnauthorized')); })
         .finally(() => setIsAnalyzing(false)),
 
-      rewriteViaProxy(modelId, text, clientKeys)
-        .then((data) => {
+      rewriteViaProxy(modelId, text, clientKeys, targetInstruction(activeTarget, isJa))
+        .then(async (data) => {
           recordUsage();
           const rewritten = data.content?.[0]?.text?.trim() || '';
-          if (rewritten) pendingRewrite = { original: text, rewritten };
+          if (rewritten) pendingRewrite = await finalizeResult(text, rewritten, activeTarget);
           else alert(t('failedToRewrite'));
         })
         .catch((e) => { console.error('[rewrite]', e); alert(e.message?.includes('401') ? t('failedUnauthorized') : t('failedToRewrite')); })
@@ -914,7 +1065,7 @@ export default function TextEditor() {
     setRemaining(getRemaining());
     stopProgress();
     if (pendingRewrite) setRewriteResult(pendingRewrite);
-  }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress]);
+  }, [resolveModel, clientKeys, customInstruction, startProgress, stopProgress, activeTarget, isJa, finalizeResult]);
 
   // rewrite / compose 両方の結果モーダルで共用
   const applyResult = useCallback(() => {
@@ -1310,6 +1461,33 @@ export default function TextEditor() {
                 </span>
               </button>
             </div>
+          </div>
+
+          {/* 出力先テンプレート：プロンプト制約・生成後の除去・辞書プリセットを一括で決める */}
+          <div style={{ padding: '14px 24px 0', borderTop: '1px solid var(--border-primary)' }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 6 }}>
+              {t('outputTarget')}
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {targets.map((tg) => (
+                <button key={tg.id}
+                  onClick={() => setOutputTargetId(tg.id)}
+                  title={tg.descText}
+                  aria-pressed={outputTargetId === tg.id}
+                  style={{
+                    padding: '4px 11px', fontSize: 12, fontWeight: 500,
+                    border: '1px solid var(--border-primary)', borderRadius: 20,
+                    background: outputTargetId === tg.id ? 'var(--accent)' : 'var(--bg-secondary)',
+                    color: outputTargetId === tg.id ? '#fff' : 'var(--text-secondary)',
+                    cursor: 'pointer', transition: 'all 0.15s', whiteSpace: 'nowrap',
+                  }}>
+                  {tg.labelText}
+                </button>
+              ))}
+            </div>
+            <p style={{ margin: '6px 0 0', fontSize: 12, lineHeight: 1.5, color: 'var(--text-muted)' }}>
+              {targets.find((tg) => tg.id === outputTargetId)?.descText}
+            </p>
           </div>
 
           {/* Custom Instruction */}
@@ -2018,6 +2196,7 @@ export default function TextEditor() {
                 </div>
               ))}
             </div>
+            {activeResult.report && <ResultReport report={activeResult.report} />}
             <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: 10, padding: '14px 24px', borderTop: '1px solid var(--border-subtle)' }}>
               <button onClick={closeResult}
                 style={{ padding: '8px 18px', fontSize: 13, fontWeight: 500, borderRadius: 'var(--radius)', border: '1px solid var(--border-primary)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
