@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SlidersHorizontal, Volume2, Square, Loader2 } from 'lucide-react';
 import { t, locale } from '../locales';
 
-const labelStyle = { display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5 };
+const labelStyle = { display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 5 };
 const fieldStyle = {
   width: '100%', padding: '7px 10px', fontSize: 12,
   border: '1px solid var(--border-primary)', borderRadius: 'var(--radius)',
@@ -119,7 +119,7 @@ export function TtsSettingsForm({ tts }) {
             onChange={(v) => update({ vvIntonation: v })} />
           <Slider label={t('ttsVolume')} value={settings.vvVolume} min={0} max={2} step={0.1}
             onChange={(v) => update({ vvVolume: v })} />
-          <p style={{ fontSize: 11, color: 'var(--text-faint)', margin: 0, lineHeight: 1.5 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-faint)', margin: 0, lineHeight: 1.5 }}>
             {t('ttsVoicevoxHint')}
           </p>
         </>
@@ -146,7 +146,7 @@ export function TtsSettingsForm({ tts }) {
       </button>
 
       {error && (
-        <p style={{ fontSize: 11, color: 'var(--cat-spelling)', margin: 0, wordBreak: 'break-all' }}>{error}</p>
+        <p style={{ fontSize: 12, color: 'var(--cat-spelling)', margin: 0, wordBreak: 'break-all' }}>{error}</p>
       )}
     </div>
   );
