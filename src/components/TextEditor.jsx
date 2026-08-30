@@ -522,7 +522,7 @@ Writing:
 /* ─── Compose（文脈整形）用プロンプト本文 ─────────
    下書き・背景・目的セクションは composeViaProxy で末尾に付加する。
    プロンプトはジャッジパネル（構成再設計 / 目的適合 / 忠実性の3案統合）で設計。 */
-const COMPOSE_PROMPT_JA = `あなたは日本語の編集者です。この後に示す未整理の【下書き】を、【背景・状況】と【目的・ゴール】に沿って、人間が書いた自然な一本の文章に再構成してください。下書きは音声入力などの走り書きを想定しています。誤字直しや語尾の整えではなく、構成そのものを設計し直すことが主な仕事です。同じ下書きでも、背景や目的が違えば書くべき文章は変わります。たとえば目的が上司への謝罪と報告なら丁寧な報告と対応策の文書に、チームへの共有なら簡潔な状況共有に、というように、構成・語彙・トーン・敬体/常体を読み手と目的に合わせて組み立て直してください。
+const COMPOSE_PROMPT_JA = (mdRule) => `あなたは日本語の編集者です。この後に示す未整理の【下書き】を、【背景・状況】と【目的・ゴール】に沿って、人間が書いた自然な一本の文章に再構成してください。下書きは音声入力などの走り書きを想定しています。誤字直しや語尾の整えではなく、構成そのものを設計し直すことが主な仕事です。同じ下書きでも、背景や目的が違えば書くべき文章は変わります。たとえば目的が上司への謝罪と報告なら丁寧な報告と対応策の文書に、チームへの共有なら簡潔な状況共有に、というように、構成・語彙・トーン・敬体/常体を読み手と目的に合わせて組み立て直してください。
 
 【最優先：構成を組み立て直す】
 - 【下書き】は、順序も粒度もバラついた素材とみなす。書かれた並び順に縛られない。
@@ -559,7 +559,7 @@ ${mdRule}。装飾記号と絵文字は使わない。箇条書きが自然な�
 【出力】
 - 再構成後の本文だけを出力する。説明・前置き・注記・見出しラベル・セクション名は一切出力しない。「件名：」のようなラベルは付けず、そのまま貼り付けられる本文に仕上げる。`;
 
-const COMPOSE_PROMPT_EN = `You are a Japanese-language editor. Reconstruct the unstructured [Draft] shown below into a single, natural piece of writing that reads as if a human wrote it, following the [Background/Situation] and [Purpose/Goal]. The draft is assumed to be rough notes, such as from voice input. Your main job is to redesign the structure itself, not to fix typos or smooth sentence endings. The same draft should become different writing when the background or purpose differs: for example, if the purpose is an apology and report to a manager, produce a polite report with a plan of action; if it is a quick share to the team, produce a concise status update. Rebuild the structure, wording, tone, and formality (polite/plain form) to fit the reader and the purpose.
+const COMPOSE_PROMPT_EN = (mdRule) => `You are a Japanese-language editor. Reconstruct the unstructured [Draft] shown below into a single, natural piece of writing that reads as if a human wrote it, following the [Background/Situation] and [Purpose/Goal]. The draft is assumed to be rough notes, such as from voice input. Your main job is to redesign the structure itself, not to fix typos or smooth sentence endings. The same draft should become different writing when the background or purpose differs: for example, if the purpose is an apology and report to a manager, produce a polite report with a plan of action; if it is a quick share to the team, produce a concise status update. Rebuild the structure, wording, tone, and formality (polite/plain form) to fit the reader and the purpose.
 
 [Top priority: rebuild the structure]
 - Treat the [Draft] as raw material whose order and level of detail are uneven. Do not be bound by the order in which it was written.
@@ -601,7 +601,7 @@ const composeViaProxy = async (model, text, clientKeys, { background = '', purpo
   // 出力先の指示が無いとき(自由)は緩和しない。緩和が要るのは、後段で
   // Markdownを許す指示と前段の禁止が食い違う場合だけ。
   const mdRule = markdownRule(targetRules ? markdown : 'none', isJa);
-  const instructions = isJa ? COMPOSE_PROMPT_JA : COMPOSE_PROMPT_EN;
+  const instructions = (isJa ? COMPOSE_PROMPT_JA : COMPOSE_PROMPT_EN)(mdRule);
   const bg = background.trim();
   const pp = purpose.trim();
   // 背景・目的は入力がある時だけセクションとして付加（空欄でも破綻しない設計）
