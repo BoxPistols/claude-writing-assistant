@@ -33,6 +33,17 @@ export async function getPresetScope(presetName) {
 }
 
 /**
+ * 生成側に渡す日本語ライティング規律を返す。辞書から自動生成されたもので、
+ * 検出ルールと同じ情報源を持つ。ここでクリシェの一覧を書かない。
+ * 書かずに済ませると、辞書に語が増えても生成側が知らないままになる。
+ * @param {'writing-guard'|'writing-guard-compact'|'ux-writing-guard'|'clean-sheet-writing'} id
+ */
+export async function getWritingGuard(id = 'writing-guard') {
+  const { data } = await load();
+  return data.guards?.find((g) => g.id === id)?.body || '';
+}
+
+/**
  * 辞書が持つ決定論的な修正を適用する。修正テンプレートは辞書側にあり、ここでは書かない。
  * businessプリセットの対象は3ルール(和欧間スペース、感嘆符の重ね、することができます)で、
  * いずれも文意を変えない。自動で直せるものを先に消し、人が判断すべき指摘だけを検査に残す。

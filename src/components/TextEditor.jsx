@@ -16,7 +16,7 @@ import { isModKey, formatShortcut, loadShortcuts, saveShortcuts, shortcutFromEve
 import { canUse, recordUsage, getRemaining, getResetTime, RATE_LIMIT, hasUserKeys } from '../utils/rateLimit';
 import { OUTPUT_TARGETS, listTargets, getTarget, targetInstruction, markdownRule, DEFAULT_TARGET_ID } from '../config/outputTargets';
 import { sanitizeForTarget, summarizeRemovals } from '../utils/sanitize';
-import { autoFix, checkText, countBySeverity, diffReport } from '../utils/deadCliche';
+import { autoFix, checkText, countBySeverity, diffReport, getWritingGuard } from '../utils/deadCliche';
 
 // {key}形式の穴埋め。文言はlocales側に置き、ここでは組み立てだけ行う。
 const fmt = (key, vars) => Object.entries(vars).reduce((acc, [k, v]) => acc.replaceAll(`{${k}}`, v), t(key));
@@ -107,7 +107,7 @@ function ClicheDetails({ violations }) {
  * 検査で0件だったことを「問題なし」と読ませないため、検査範囲を常に併記する。
  */
 function ResultReport({ report }) {
-  const { removed, fixed, cliche, clicheError, diff, targetLabel } = report;
+  const { removed, fixed, cliche, clicheError, diff, targetLabel, unchanged } = report;
   const counts = cliche?.counts;
   const total = cliche ? cliche.violations.length : 0;
 
@@ -127,6 +127,13 @@ function ResultReport({ report }) {
       <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>
         {t('reportTitle')} — {targetLabel}
       </div>
+
+      {unchanged && (
+        <div style={{ padding: '8px 10px', borderRadius: 'var(--radius)', border: `1px solid ${SEV_COLOR.warn}`, color: 'var(--text-secondary)', fontSize: 12, lineHeight: 1.6 }}>
+          <span style={{ fontWeight: 700, color: SEV_COLOR.warn }}>{t('reportUnchanged')} </span>
+          {t('reportUnchangedNote')}
+        </div>
+      )}
 
       <Row label={t('reportRemoved')}>
         {removed.length
@@ -337,6 +344,9 @@ const rewriteViaProxy = async (model, text, clientKeys, targetRules = '', markdo
   // 出力先の指示が無いとき(自由)は緩和しない。緩和が要るのは、後段で
   // Markdownを許す指示と前段の禁止が食い違う場合だけ。
   const mdRule = markdownRule(targetRules ? markdown : 'none', isJa);
+  // クリシェの一覧はここに書かない。辞書から自動生成された規律を使う。
+  // 手元に一覧を持つと、辞書に語が増えても生成側が古いままになる。
+  const guard = isJa ? await getWritingGuard() : '';
   const basePrompt = isJa
     ? `あなたは日本語のプロ編集者です。以下の文章を、人間が書いたと感じさせる自然な文章に書き直してください。意味・事実は変えないでください。トーンも基本的に維持しますが、文体ルール（です・ます調の統一等）が優先されます。
 
@@ -349,16 +359,7 @@ ${mdRule}
 - —（emダッシュ）を言い換えに使わない
 - 絵文字を装飾的に使わない
 
-【厳守ルール：AI特有パターンの排除】
-- 「さらに」「また」「したがって」「そのため」「結果として」「加えて」「それに伴い」等の接続詞を削るか最小限にする
-- 「最適化」「本質」「価値を最大化」「エコシステム」「ランドスケープ」「パラダイム」「シナジー」「レバレッジ」等の抽象バズワードを、何がどうなるかが伝わる具体表現に置き換える
-- 「重要な役割を果たす」「〜として機能する」「〜の象徴となっている」等の意義の水増し表現を削る
-- 「〜を象徴しています」「〜を反映しています」「〜を体現しています」等の「-ing分析」的な浅い分析表現を避ける
-- not A but B 構文（「これは〜ではなく〜です」「〜だけでなく〜でもあります」）の多用をやめる
-- 3つの要素を無理に並べる「ルール・オブ・スリー」を避ける（「革新、創造、そして成長」等）
-- 同じ名詞を別の言い方で繰り返さない（「プロジェクト→取り組み→施策→本件」のような過剰な類語置換を避ける）
-- 「〜から〜まで」で実際に連続しない概念を並べない（「戦略から実行まで」等の偽レンジ）
-- 「〜することができます」「〜を行うことが可能です」等の冗長表現を簡潔にする（→「〜できます」「〜します」）
+${guard}
 
 【厳守ルール：文体・リズム】
 - 元の文章が丁寧体（です・ます調）の場合はそれを維持し、常体（だ・である調）の場合は常体を維持する
@@ -377,7 +378,6 @@ ${mdRule}
 - 「もちろんです！」「素晴らしいご質問ですね」等のおべっか表現を入れない
 - STEP/ステップによる構造宣言を避ける
 - 「課題と今後の展望」のようなテンプレ的なセクション構成を避ける
-- 羅針盤・土台・エンジン・設計図・架け橋等の使い古された比喩を使わない
 - 評価語（「非常に重要です」「大きなメリット」「画期的な」）には根拠を伴わせるか削る
 - 「〜における」「〜に関して」を多用しない。もっと短く言い換える
 - 漠然と明るい結論（「今後の発展が期待されます」「未来は明るい」等）がAI的な定型表現である場合は、元の意図を保ちつつ具体的な結びに言い換える（意味やトーンが変わる場合は無理に変えない）
@@ -464,6 +464,8 @@ const refineViaProxy = async (model, text, clientKeys, violations, targetRules =
     ? `${i + 1}. 「${(v.matched || '').trim()}」(${v.line}行目) 問題: ${v.why} 直し方: ${v.ask}`
     : `${i + 1}. "${(v.matched || '').trim()}" (line ${v.line}) Problem: ${v.why} Fix: ${v.ask}`)).join('\n');
 
+  // 直し方の優先順と制約は辞書の規律が持っている。ここで書き写さない。
+  const guard = isJa ? await getWritingGuard() : '';
   const head = isJa
     ? `以下の文章から、指摘されたクリシェを取り除いてください。
 
@@ -472,16 +474,7 @@ const refineViaProxy = async (model, text, clientKeys, violations, targetRules =
 - 行を新設しない。段落の数を増やさない
 - 指摘されていない箇所は変えない
 
-【直し方の優先順】
-1. 同じ意味の平易な語に置き換える。それで文が成り立つならこれが最善
-2. 収まらないときは文の組み立てごと変える。語順・述語・助詞を入れ替える
-3. 本文の文脈から意味を決められないときは、その文を変えずに残す。推測で書き換えない
-
-【書き方】
-- 語を消すだけで済ませない。主語・目的語・述語を欠いた文にしない
-- 比喩は、本文の中でそれが指している事柄に置き換える
-- Markdownの記号(見出しの#、箇条書きの-や数字、表の|、リンクの[]()、強調の記号、コードブロックの\`\`\`)を書き換えない
-- コードブロックとインラインコードの中身は書き直さない`
+${guard}`
     : `Remove the flagged cliches from the text below.
 
 Constraints (these override the guidance):
@@ -601,6 +594,7 @@ const composeViaProxy = async (model, text, clientKeys, { background = '', purpo
   // 出力先の指示が無いとき(自由)は緩和しない。緩和が要るのは、後段で
   // Markdownを許す指示と前段の禁止が食い違う場合だけ。
   const mdRule = markdownRule(targetRules ? markdown : 'none', isJa);
+  const guard = isJa ? await getWritingGuard() : '';
   const instructions = (isJa ? COMPOSE_PROMPT_JA : COMPOSE_PROMPT_EN)(mdRule);
   const bg = background.trim();
   const pp = purpose.trim();
@@ -610,7 +604,8 @@ const composeViaProxy = async (model, text, clientKeys, { background = '', purpo
   // 出力先の制約は背景・目的より後に置く。宛先の規約は書き手の意図より強い
   const targetSection = targetRules ? `\n\n${targetRules}` : '';
   const draftLabel = isJa ? '【下書き】' : '[Draft]';
-  const prompt = `${instructions}${bgSection}${ppSection}${targetSection}\n\n${draftLabel}\n${text}`;
+  const guardSection = guard ? `\n\n${guard}` : '';
+  const prompt = `${instructions}${guardSection}${bgSection}${ppSection}${targetSection}\n\n${draftLabel}\n${text}`;
 
   const res = await fetch('/api/analyze', {
     method: 'POST',
@@ -1120,6 +1115,8 @@ export default function TextEditor() {
       report.clicheError = e.message || String(e);
     }
     report.diff = diffReport(original, finalText);
+    // 何も変わらなかったことを黙って返さない。利用者には失敗に見える。
+    report.unchanged = finalText.trim() === original.trim();
     return { original, rewritten: finalText, report };
   }, [isJa]);
 
